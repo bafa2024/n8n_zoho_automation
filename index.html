@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Zoho Bills Automation Console — Dashboard (Demo)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100">
+  <!-- Topbar -->
+  <div class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-8 rounded-xl bg-blue-600"></div>
+        <div class="font-semibold text-slate-900">Zoho Bills Automation Console — Demo</div>
+      </div>
+      <nav class="flex gap-1 rounded-xl bg-slate-100 p-1">
+        <a class="px-3 py-1.5 rounded-lg text-sm bg-white shadow text-slate-900" href="index.html">Dashboard</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="settings.html">Settings</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="logs.html">Logs</a>
+      </nav>
+      <div class="flex items-center gap-2">
+        <input id="fileInput" type="file" accept="application/pdf" multiple class="hidden" />
+        <button id="uploadBtn" class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-white shadow hover:bg-blue-700">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4">
+            <path d="M12 16V4m0 0l-4 4m4-4l4 4" />
+            <path d="M20 16v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2" />
+          </svg>
+          Upload PDFs
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <main class="mx-auto max-w-7xl px-4 py-6 space-y-6">
+    <!-- Stats -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="text-slate-500 text-sm">Processed today</div>
+        <div id="statProcessed" class="mt-1 text-2xl font-semibold text-slate-900">0</div>
+        <div id="statSub" class="mt-1 text-slate-500 text-sm">0 warnings · 0 errors</div>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="text-slate-500 text-sm">Queue</div>
+        <div class="mt-1 text-2xl font-semibold text-slate-900">0</div>
+        <div class="mt-1 text-slate-500 text-sm">Idle</div>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="text-slate-500 text-sm">Avg duration</div>
+        <div id="statAvg" class="mt-1 text-2xl font-semibold text-slate-900">0.0s</div>
+        <div class="mt-1 text-slate-500 text-sm">Last 10 runs</div>
+      </div>
+    </div>
+
+    <!-- Dropzone -->
+    <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 flex flex-col items-center justify-center text-center">
+      <div class="text-slate-900 font-medium">Drop PDFs here or click to upload</div>
+      <div class="text-slate-500 text-sm">Files are sent to the parser (simulated) and appear below</div>
+      <button id="selectFiles" class="mt-3 rounded-xl bg-slate-900 text-white px-3 py-2">Select files</button>
+    </div>
+
+    <!-- Recent runs -->
+    <div>
+      <div class="mb-2 text-slate-900 font-semibold">Recent runs</div>
+      <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <table class="min-w-full">
+          <thead class="bg-slate-50 text-slate-600">
+            <tr>
+              <th class="px-4 py-2 text-left text-xs font-medium uppercase">Run ID</th>
+              <th class="px-4 py-2 text-left text-xs font-medium uppercase">Invoice No.</th>
+              <th class="px-4 py-2 text-left text-xs font-medium uppercase">Vendor</th>
+              <th class="px-4 py-2 text-left text-xs font-medium uppercase">Status</th>
+              <th class="px-4 py-2 text-left text-xs font-medium uppercase">Items</th>
+              <th class="px-4 py-2 text-left text-xs font-medium uppercase">Bill</th>
+              <th class="px-4 py-2 text-left text-xs font-medium uppercase">When</th>
+            </tr>
+          </thead>
+          <tbody id="runsTbody" class="divide-y divide-slate-200 text-slate-800"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const STATUS = {
+      success: { label: "Success", chip: "bg-green-100 text-green-800 border-green-200" },
+      warning: { label: "Warning", chip: "bg-amber-100 text-amber-800 border-amber-200" },
+      error:   { label: "Error",   chip: "bg-red-100 text-red-800 border-red-200" },
+      pending: { label: "Pending", chip: "bg-slate-100 text-slate-700 border-slate-200" },
+    };
+
+    const UNIT_WHITELIST = ["PC", "SET", "Unit"];
+
+    const sampleItems = [
+      { desc: "BLOCK SCREW A - EX5CLASS", sku: "D0054", qty: 20, unit: "PC",   rate: 4.5,  disc: 0, tax: 0 },
+      { desc: "METER ASSY TCB - Y15ZR V2 (2PV)", sku: "3F0236", qty: 2, unit: "SET",  rate: 175,  disc: 0, tax: 0 },
+      { desc: "CLIP PANEL - WAVE",               sku: "W0088",  qty: 10, unit: "PC",   rate: 1.8,  disc: 0, tax: 0 },
+      { desc: "HOSE BREATHER - EX5",            sku: "H0136",  qty: 12, unit: "PC",   rate: 3.2,  disc: 0, tax: 0 },
+      { desc: "IGNITION COIL - LC135",          sku: "I0061",  qty: 4,  unit: "Unit", rate: 55,   disc: 0, tax: 0 },
+      { desc: "BRAKE PAD - RS150R",             sku: "B0912",  qty: 6,  unit: "SET",  rate: 24.5, disc: 0, tax: 0 },
+      { desc: "SPROCKET REAR 415-41T",          sku: "S4141",  qty: 5,  unit: "PC",   rate: 28,   disc: 0, tax: 0 },
+      { desc: "MIRROR ASSY - SYM",              sku: "M0091",  qty: 2,  unit: "SET",  rate: 60,   disc: 0, tax: 0 },
+    ];
+
+    function computeTotals(items) {
+      const subtotal = items.reduce((sum, it) => sum + it.qty * it.rate * (1 - it.disc / 100), 0);
+      const tax = items.reduce((sum, it) => sum + (it.tax ? (it.qty * it.rate * (1 - it.disc / 100) * it.tax) / 100 : 0), 0);
+      const discount = 0;
+      const rounding = 0;
+      const total = subtotal + tax - discount + rounding;
+      return { subtotal, tax, discount, rounding, total };
+    }
+
+    function seedRuns() {
+      const r1Items = sampleItems;
+      const r1Totals = computeTotals(r1Items);
+      const r2Items = sampleItems.slice(0, 4).map((it, i) => ({ ...it, qty: (i + 1) * 3 }));
+      const r2Totals = computeTotals(r2Items);
+      return [
+        {
+          id: "R-0042",
+          status: "success",
+          invoiceNo: "I-2024-12-452",
+          vendor: "JIUN LIN MOTOR SDN BHD",
+          billTo: "UCON MOTORSPORT",
+          shipTo: "UCON MOTORSPORT",
+          date: "2024-12-13",
+          terms: 90,
+          agent: "TYSON",
+          items: r1Items,
+          totals: r1Totals,
+          billLink: "https://books.zoho.com/app#/bills/123456",
+          duration: 12.7,
+          file: "JIUN-LIN-I-2024-12-452.pdf",
+          notes: [],
+          createdAt: Date.now() - 1000 * 60 * 60 * 6,
+        },
+        {
+          id: "R-0041",
+          status: "warning",
+          invoiceNo: "I-25070897",
+          vendor: "LEONG HOOI SDN BHD",
+          billTo: "UCON MOTORSPORT",
+          shipTo: "UCON MOTORSPORT",
+          date: "2025-07-08",
+          terms: 30,
+          agent: "—",
+          items: r2Items,
+          totals: r2Totals,
+          billLink: "https://books.zoho.com/app#/bills/987654",
+          duration: 9.3,
+          file: "Leong-hooi-I-25070897.pdf",
+          notes: [
+            "2 new items created (SKU suffixed with supplier initials)",
+            "1 item missing explicit unit; defaulted to PC",
+          ],
+          createdAt: Date.now() - 1000 * 60 * 60 * 12,
+        },
+        {
+          id: "R-0040",
+          status: "error",
+          invoiceNo: null,
+          vendor: null,
+          billTo: null,
+          shipTo: null,
+          date: null,
+          terms: null,
+          agent: null,
+          items: [],
+          totals: computeTotals([]),
+          billLink: null,
+          duration: 3.2,
+          file: "Unreadable.pdf",
+          notes: ["Missing required fields: Invoice No., Date"],
+          createdAt: Date.now() - 1000 * 60 * 60 * 24,
+        },
+      ];
+    }
+
+    function loadRuns() {
+      const raw = localStorage.getItem("runs");
+      if (!raw) return [];
+      try { return JSON.parse(raw) } catch { return [] }
+    }
+    function saveRuns(runs) { localStorage.setItem("runs", JSON.stringify(runs)) }
+
+    function ensureSeed() {
+      if (!localStorage.getItem("runs")) {
+        saveRuns(seedRuns());
+      }
+    }
+
+    function chip(status) {
+      const s = STATUS[status] || STATUS.pending;
+      return `
+        <span class="inline-flex items-center border px-2.5 py-0.5 rounded-full text-xs font-medium ${s.chip}">
+          <span class="mr-1 h-1.5 w-1.5 rounded-full bg-current/60"></span>${s.label}
+        </span>
+      `;
+    }
+
+    function timeAgo(ts) {
+      const diff = Date.now() - ts;
+      const minutes = Math.floor(diff / 60000);
+      if (minutes < 1) return "just now";
+      if (minutes < 60) return `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
+    }
+
+    function renderStats(runs) {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const tRuns = runs.filter(r => r.createdAt >= today.getTime());
+      const processed = tRuns.length;
+      const warnings = tRuns.filter(r => r.status === "warning").length;
+      const errors = tRuns.filter(r => r.status === "error").length;
+      const avg = tRuns.length ? (tRuns.reduce((s,r)=> s + (Number(r.duration)||0),0) / tRuns.length) : 0;
+      document.getElementById("statProcessed").textContent = processed;
+      document.getElementById("statSub").textContent = `${warnings} warnings · ${errors} errors`;
+      document.getElementById("statAvg").textContent = `${avg.toFixed(1)}s`;
+    }
+
+    function renderTable(runs) {
+      const tbody = document.getElementById("runsTbody");
+      tbody.innerHTML = runs.map(r => `
+        <tr class="hover:bg-slate-50 cursor-pointer" data-id="${r.id}">
+          <td class="px-4 py-2 font-medium text-slate-900">${r.id}</td>
+          <td class="px-4 py-2">${r.invoiceNo || "—"}</td>
+          <td class="px-4 py-2">${r.vendor || "—"}</td>
+          <td class="px-4 py-2">${chip(r.status)}</td>
+          <td class="px-4 py-2">${r.items.length || "—"}</td>
+          <td class="px-4 py-2">
+            ${r.billLink ? `<a class="text-blue-600 hover:underline" href="${r.billLink}" target="_blank" rel="noreferrer">Open</a>` : "—"}
+          </td>
+          <td class="px-4 py-2 text-slate-500 text-sm">${timeAgo(r.createdAt)}</td>
+        </tr>
+      `).join("");
+      // row click -> run.html?id=R-XXXX
+      Array.from(tbody.querySelectorAll("tr[data-id]")).forEach(tr => {
+        tr.addEventListener("click", () => {
+          const id = tr.getAttribute("data-id");
+          location.href = `run.html?id=${encodeURIComponent(id)}`;
+        });
+      });
+    }
+
+    function simulateProcess(fileName) {
+      const baseId = Math.random().toString(36).slice(2, 6).toUpperCase();
+      const status = ["success", "warning", "error"][Math.floor(Math.random() * 3)];
+      const items = status === "error" ? [] : sampleItems.map((it) => ({ ...it, qty: Math.max(1, Math.round(it.qty * (0.8 + Math.random() * 0.4))) }));
+      const totals = computeTotals(items);
+      return {
+        id: `R-${baseId}`,
+        status,
+        invoiceNo: status === "error" ? null : `I-${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}-${Math.floor(Math.random()*900+100)}`,
+        vendor: status === "error" ? null : "SUPPLIER SDN BHD",
+        billTo: status === "error" ? null : "UCON MOTORSPORT",
+        shipTo: status === "error" ? null : "UCON MOTORSPORT",
+        date: status === "error" ? null : new Date().toISOString().slice(0,10),
+        terms: status === "error" ? null : 30,
+        agent: status === "error" ? null : "AUTO",
+        items,
+        totals,
+        billLink: status === "success" ? "https://books.zoho.com/app#/bills/preview" : null,
+        duration: Number((6 + Math.random() * 10).toFixed(1)),
+        file: fileName,
+        notes: status === "warning" ? ["Created 1 new item (SKU suffix)", "1 unit defaulted to PC"] : status === "error" ? ["Missing required fields"] : [],
+        createdAt: Date.now(),
+      };
+    }
+
+    function init() {
+      ensureSeed();
+      let runs = loadRuns();
+      renderStats(runs);
+      renderTable(runs);
+
+      const fileInput = document.getElementById("fileInput");
+      const uploadBtn = document.getElementById("uploadBtn");
+      const selectFiles = document.getElementById("selectFiles");
+
+      function handleFiles(files) {
+        const newRuns = Array.from(files).map(f => simulateProcess(f.name));
+        runs = [...newRuns, ...runs];
+        saveRuns(runs);
+        renderStats(runs);
+        renderTable(runs);
+      }
+
+      uploadBtn.addEventListener("click", () => fileInput.click());
+      selectFiles.addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", (e) => {
+        if (e.target.files && e.target.files.length) handleFiles(e.target.files);
+        e.target.value = "";
+      });
+
+      // Optional: support drag & drop
+      const dropzone = document.querySelector(".border-dashed");
+      dropzone.addEventListener("dragover", (ev) => { ev.preventDefault(); dropzone.classList.add("ring-2","ring-blue-500"); });
+      dropzone.addEventListener("dragleave", () => dropzone.classList.remove("ring-2","ring-blue-500"));
+      dropzone.addEventListener("drop", (ev) => {
+        ev.preventDefault();
+        dropzone.classList.remove("ring-2","ring-blue-500");
+        if (ev.dataTransfer.files && ev.dataTransfer.files.length) handleFiles(ev.dataTransfer.files);
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Zoho Bills Automation Console — Settings (Demo)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100">
+  <!-- Topbar -->
+  <div class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-8 rounded-xl bg-blue-600"></div>
+        <div class="font-semibold text-slate-900">Zoho Bills Automation Console — Demo</div>
+      </div>
+      <nav class="flex gap-1 rounded-xl bg-slate-100 p-1">
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="index.html">Dashboard</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm bg-white shadow text-slate-900" href="settings.html">Settings</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="logs.html">Logs</a>
+      </nav>
+      <div></div>
+    </div>
+  </div>
+
+  <main class="mx-auto max-w-7xl px-4 py-6 space-y-6">
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="text-slate-900 font-semibold mb-3">Zoho Books connection</div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="text-sm text-slate-600">Organization ID</label>
+          <input id="orgId" class="mt-1 w-full rounded-xl border px-3 py-2" />
+        </div>
+        <div>
+          <label class="text-sm text-slate-600">Agent custom field API name</label>
+          <input id="agentField" class="mt-1 w-full rounded-xl border px-3 py-2" />
+        </div>
+        <div>
+          <label class="text-sm text-slate-600">Email summary recipient</label>
+          <input id="recipient" class="mt-1 w-full rounded-xl border px-3 py-2" />
+        </div>
+      </div>
+    </div>
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="text-slate-900 font-semibold mb-3">Matching thresholds</div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="text-sm text-slate-600">Vendor threshold</label>
+          <input id="vendorThreshold" type="number" min="0" max="1" step="0.01" class="mt-1 w-full rounded-xl border px-3 py-2" />
+        </div>
+        <div>
+          <label class="text-sm text-slate-600">Item threshold</label>
+          <input id="itemThreshold" type="number" min="0" max="1" step="0.01" class="mt-1 w-full rounded-xl border px-3 py-2" />
+        </div>
+        <div>
+          <label class="text-sm text-slate-600">Units whitelist</label>
+          <input id="units" class="mt-1 w-full rounded-xl border px-3 py-2" />
+        </div>
+      </div>
+    </div>
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="text-slate-900 font-semibold mb-3">Danger zone</div>
+      <div class="flex items-center gap-2">
+        <button class="rounded-xl border px-3 py-2 hover:bg-slate-50" onclick="alert('Revoke OAuth (demo)')">Revoke OAuth</button>
+        <button class="rounded-xl bg-red-600 text-white px-3 py-2 hover:bg-red-700" onclick="alert('Delete logs (demo)')">Delete logs</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const DEFAULTS = {
+      orgId: "123456789",
+      agentField: "cf_agent",
+      recipient: "accounting@example.com",
+      vendorThreshold: 0.85,
+      itemThreshold: 0.9,
+      units: "PC, SET, Unit",
+    };
+
+    function loadSettings() {
+      const raw = localStorage.getItem("settings");
+      if (!raw) return { ...DEFAULTS };
+      try { return { ...DEFAULTS, ...JSON.parse(raw) } } catch { return { ...DEFAULTS } }
+    }
+    function saveSettings(s) {
+      localStorage.setItem("settings", JSON.stringify(s));
+    }
+
+    function bindSettings() {
+      const s = loadSettings();
+      orgId.value = s.orgId;
+      agentField.value = s.agentField;
+      recipient.value = s.recipient;
+      vendorThreshold.value = s.vendorThreshold;
+      itemThreshold.value = s.itemThreshold;
+      units.value = s.units;
+
+      [orgId, agentField, recipient, vendorThreshold, itemThreshold, units].forEach(el => {
+        el.addEventListener("input", () => {
+          saveSettings({
+            orgId: orgId.value,
+            agentField: agentField.value,
+            recipient: recipient.value,
+            vendorThreshold: parseFloat(vendorThreshold.value) || 0,
+            itemThreshold: parseFloat(itemThreshold.value) || 0,
+            units: units.value,
+          });
+        });
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", bindSettings);
+  </script>
+</body>
+</html>

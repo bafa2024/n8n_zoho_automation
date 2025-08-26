@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Zoho Bills Automation Console — Logs (Demo)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100">
+  <!-- Topbar -->
+  <div class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-8 rounded-xl bg-blue-600"></div>
+        <div class="font-semibold text-slate-900">Zoho Bills Automation Console — Demo</div>
+      </div>
+      <nav class="flex gap-1 rounded-xl bg-slate-100 p-1">
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="index.html">Dashboard</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="settings.html">Settings</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm bg-white shadow text-slate-900" href="logs.html">Logs</a>
+      </nav>
+      <div></div>
+    </div>
+  </div>
+
+  <main class="mx-auto max-w-7xl px-4 py-6">
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="text-slate-900 font-semibold mb-3">Audit logs</div>
+      <div id="logBox" class="text-sm text-slate-700 space-y-1 max-h-[70vh] overflow-auto font-mono"></div>
+    </div>
+  </main>
+
+  <script>
+    const STATUS = {
+      success: "Success",
+      warning: "Warning",
+      error:   "Error",
+      pending: "Pending",
+    };
+
+    function loadRuns() {
+      const raw = localStorage.getItem("runs");
+      if (!raw) return [];
+      try { return JSON.parse(raw) } catch { return [] }
+    }
+
+    function init() {
+      const box = document.getElementById("logBox");
+      const runs = loadRuns();
+      box.innerHTML = runs.map(r => {
+        const when = new Date(r.createdAt).toLocaleString();
+        const st = STATUS[r.status] || "Pending";
+        return `[${when}] ${r.id} ${r.invoiceNo || "—"} ${r.vendor || "—"} → ${st}`;
+      }).join("<br/>");
+    }
+
+    document.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>
