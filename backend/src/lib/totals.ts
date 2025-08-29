@@ -1,4 +1,4 @@
-import type { LineItem, Totals } from './types';
+import type { LineItem, Totals } from './types.js';
 
 export function computeTotals(items: LineItem[]): Totals {
   const subtotal = items.reduce((sum, it) => sum + lineNet(it), 0);

@@ -1,6 +1,6 @@
-import { env } from '../lib/env';
-import { RunPayloadsRepo } from '../storage/runPayloadsRepo';
-import { RunsRepo } from '../storage/runsRepo';
+import { env } from '../lib/env.js';
+import { RunPayloadsRepo } from '../storage/runPayloadsRepo.js';
+import { RunsRepo } from '../storage/runsRepo.js';
 
 type ZohoBillLine = { name?: string; item_id?: string; sku?: string; rate: number; quantity: number };
 type ZohoCreateBillReq = {
@@ -66,7 +66,6 @@ export async function createDraftBill(runId: string) {
     return { mode: 'mock', data: mock };
   }
 
-  // live path is ready for when you add tokens; it won't execute while in mock mode
   const apiRoot = env.ZOHO_API_DOMAIN.replace(/\/+$/, '');
   const url = new URL(`${apiRoot}/books/v3/bills`);
   url.searchParams.set('organization_id', env.ZOHO_ORG_ID);

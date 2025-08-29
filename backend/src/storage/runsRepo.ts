@@ -1,5 +1,5 @@
-import { db } from '../db';
-import type { Run } from '../lib/types';
+import { db } from '../db.js';
+import type { Run } from '../lib/types.js';
 
 type RunRow = {
   id: string;

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createDraftBill } from '../integrations/zoho';
+import { createDraftBill } from '../integrations/zoho.js';
 
 export const zohoRouter = Router();
 

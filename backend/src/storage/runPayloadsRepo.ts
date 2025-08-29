@@ -1,4 +1,4 @@
-import { db } from '../db';
+import { db } from '../db.js';
 
 export type PayloadKind = 'parsed' | 'zoho_request' | 'zoho_response';
 

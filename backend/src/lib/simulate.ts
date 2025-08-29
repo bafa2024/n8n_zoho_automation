@@ -1,6 +1,6 @@
-import type { LineItem, Run } from './types';
-import { computeTotals } from './totals';
-import { newRunId } from './id';
+import type { LineItem, Run } from './types.js';
+import { computeTotals } from './totals.js';
+import { newRunId } from './id.js';
 
 const SAMPLE_ITEMS: LineItem[] = [
   { desc: 'BLOCK SCREW A - EX5CLASS', sku: 'D0054', qty: 20, unit: 'PC', rate: 4.5, disc: 0, tax: 0 },

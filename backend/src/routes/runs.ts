@@ -2,13 +2,13 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 
-import { simulateRunFromFile } from '../lib/simulate';
-import { RunsRepo } from '../storage/runsRepo';
-import { sha256, safeName, saveBuffer } from '../lib/fsutil';
-import { config } from '../config';
-import { RunPayloadsRepo } from '../storage/runPayloadsRepo';
-import type { LineItem, Run } from '../lib/types';
-import { newRunId } from '../lib/id';
+import { simulateRunFromFile } from '../lib/simulate.js';
+import { RunsRepo } from '../storage/runsRepo.js';
+import { sha256, safeName, saveBuffer } from '../lib/fsutil.js';
+import { config } from '../config.js';
+import { RunPayloadsRepo } from '../storage/runPayloadsRepo.js';
+import type { LineItem, Run } from '../lib/types.js';
+import { newRunId } from '../lib/id.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -38,7 +38,6 @@ function coerceUnit(u: unknown): 'PC' | 'SET' | 'Unit' {
 async function callParser(fileName: string, buf: Buffer) {
   if (!config.parserUrl) return null;
   try {
-    // Node 20+ has global FormData/Blob/fetch types
     const form = new FormData();
     const blob = new Blob([buf], { type: 'application/pdf' });
     form.append('file', blob, fileName);
@@ -129,18 +128,15 @@ runsRouter.post('/ingest', upload.single('file'), async (req, res) => {
       createdAt: Date.now(),
     };
 
-    // store parsed snapshot for audits
     RunPayloadsRepo.add(run.id, 'parsed', parsed);
   } else {
     run = simulateRunFromFile(original);
   }
 
-  // Save file to disk
   const storedName = `${run.id}-${original}`;
   const storedPath = path.join(config.uploadDir, storedName);
   await saveBuffer(config.uploadDir, storedName, buffer);
 
-  // Persist run
   RunsRepo.add(run, fileHash, storedPath);
 
   return res.status(201).json(run);
