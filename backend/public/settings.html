@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Zoho Bills Automation Console — Settings</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100">
+  <div class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-8 rounded-xl bg-blue-600"></div>
+        <div class="font-semibold text-slate-900">Zoho Bills Automation — Demo</div>
+      </div>
+      <nav class="flex gap-1 rounded-xl bg-slate-100 p-1">
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="index.html">Dashboard</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm bg-white shadow text-slate-900" href="settings.html">Settings</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="logs.html">Logs</a>
+      </nav>
+      <div></div>
+    </div>
+  </div>
+
+  <main class="mx-auto max-w-3xl p-4 space-y-6">
+    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4">
+      <div class="text-slate-900 font-semibold">API connection</div>
+      <div class="text-slate-500 text-sm">Your pages call the backend via this base URL. Change it if your server runs elsewhere.</div>
+      <div class="mt-3 flex items-center gap-2">
+        <input id="apiBase" class="flex-1 rounded-xl border border-slate-300 px-3 py-2" placeholder="http://localhost:5050" />
+        <button id="save" class="rounded-xl bg-slate-900 text-white px-4 py-2">Save</button>
+        <button id="reset" class="rounded-xl border border-slate-300 px-4 py-2">Reset</button>
+      </div>
+      <div id="msg" class="mt-2 text-sm text-slate-600"></div>
+    </div>
+  </main>
+
+  <script>
+    function init(){
+      const input = document.getElementById('apiBase');
+      input.value = localStorage.getItem('API_BASE') || 'http://localhost:5050';
+      document.getElementById('save').addEventListener('click', ()=>{
+        const v = input.value.trim().replace(/\/$/, '');
+        localStorage.setItem('API_BASE', v);
+        document.getElementById('msg').textContent = 'Saved. Open Dashboard to test.';
+      });
+      document.getElementById('reset').addEventListener('click', ()=>{
+        localStorage.removeItem('API_BASE');
+        input.value = 'http://localhost:5050';
+        document.getElementById('msg').textContent = 'Reset to default.';
+      });
+    }
+    init();
+  </script>
+</body>
+</html>

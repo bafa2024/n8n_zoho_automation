@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Zoho Bills Automation Console — Logs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100">
+  <div class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-8 rounded-xl bg-blue-600"></div>
+        <div class="font-semibold text-slate-900">Zoho Bills Automation — Demo</div>
+      </div>
+      <nav class="flex gap-1 rounded-xl bg-slate-100 p-1">
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="index.html">Dashboard</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="settings.html">Settings</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm bg-white shadow text-slate-900" href="logs.html">Logs</a>
+      </nav>
+      <div></div>
+    </div>
+  </div>
+
+  <main class="mx-auto max-w-7xl p-4 space-y-6">
+    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4">
+      <div class="text-slate-900 font-semibold">Quick checks</div>
+      <div class="mt-2 text-sm text-slate-600" id="health">Checking /api/health …</div>
+    </div>
+  </main>
+
+  <script>
+    const API_DEFAULT = 'http://localhost:5050';
+    const API_BASE = (localStorage.getItem('API_BASE') || API_DEFAULT).replace(/\/$/, '');
+    async function check(){
+      try{
+        const r = await fetch(API_BASE + '/api/health');
+        const j = await r.json();
+        document.getElementById('health').textContent = 'OK: ' + JSON.stringify(j);
+      } catch(e){
+        document.getElementById('health').textContent = 'Failed to reach ' + API_BASE + '/api/health';
+      }
+    }
+    check();
+  </script>
+</body>
+</html>

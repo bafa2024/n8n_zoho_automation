@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Zoho Bills Automation Console — Run Details</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100">
+  <div class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-8 rounded-xl bg-blue-600"></div>
+        <div class="font-semibold text-slate-900">Zoho Bills Automation — Demo</div>
+      </div>
+      <nav class="flex gap-1 rounded-xl bg-slate-100 p-1">
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="index.html">Dashboard</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="settings.html">Settings</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="logs.html">Logs</a>
+      </nav>
+      <div></div>
+    </div>
+  </div>
+
+  <main class="mx-auto max-w-7xl p-4 space-y-6">
+    <a href="index.html" class="text-blue-700 underline">&larr; Back</a>
+
+    <div id="runCard" class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4"></div>
+
+    <div class="flex items-center gap-3">
+      <button id="btnCreateDraft" class="rounded-xl bg-slate-900 text-white px-4 py-2">Create Draft Bill (mock/live)</button>
+      <a id="billLink" target="_blank" class="text-blue-700 underline hidden">Open Bill</a>
+      <div id="actionMsg" class="text-slate-600 text-sm"></div>
+    </div>
+
+    <div id="itemsCard" class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden"></div>
+  </main>
+
+  <script>
+    const API_DEFAULT = 'http://localhost:5050';
+    const API_BASE = (localStorage.getItem('API_BASE') || API_DEFAULT).replace(/\/$/, '');
+
+    function q(k){ return new URLSearchParams(location.search).get(k); }
+    function fmtMoney(n){ return (n||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+    async function apiGetRun(id){
+      const r = await fetch(API_BASE + '/api/runs/' + encodeURIComponent(id));
+      if (!r.ok) throw new Error('not found');
+      const j = await r.json();
+      return j.run;
+    }
+
+    async function apiCreateDraft(id){
+      const r = await fetch(API_BASE + '/api/runs/' + encodeURIComponent(id) + '/zoho/draft', { method: 'POST' });
+      if (!r.ok) throw new Error('draft failed');
+      return await r.json();
+    }
+
+    function renderRun(run){
+      const statusChip = {
+        success: 'bg-green-100 text-green-800 border-green-200',
+        warning: 'bg-amber-100 text-amber-800 border-amber-200',
+        error:   'bg-red-100 text-red-800 border-red-200',
+        pending: 'bg-slate-100 text-slate-700 border-slate-200',
+      }[run.status] || 'bg-slate-100 text-slate-700 border-slate-200';
+
+      document.getElementById('runCard').innerHTML = `
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="font-semibold text-slate-900">Run <span class="font-mono">${run.id}</span></div>
+            <div class="text-slate-500 text-sm">File: ${run.file}</div>
+          </div>
+          <div><span class="text-xs px-2 py-1 rounded-full border ${statusChip}">${run.status}</span></div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+          ${kv('Invoice No.', run.invoiceNo || '—')}
+          ${kv('Vendor', run.vendor || '—')}
+          ${kv('Date', run.date || '—')}
+          ${kv('Terms', run.terms || '—')}
+          ${kv('Agent', run.agent || '—')}
+          ${kv('Subtotal', fmtMoney(run.totals?.subtotal))}
+          ${kv('Tax', fmtMoney(run.totals?.tax))}
+          ${kv('Total', fmtMoney(run.totals?.total))}
+        </div>
+        ${run.notes && run.notes.length ? '<div class="mt-3 text-sm text-amber-700"><b>Notes:</b> ' + run.notes.join('; ') + '</div>' : ''}
+      `;
+
+      const items = run.items || [];
+      const rows = items.map((it,i)=>`
+        <tr class="divide-x divide-slate-200">
+          <td class="px-3 py-2 text-sm">${i+1}</td>
+          <td class="px-3 py-2">${(it.desc||'')}</td>
+          <td class="px-3 py-2 font-mono text-sm">${(it.sku||'')}</td>
+          <td class="px-3 py-2 text-right">${(it.qty||0)}</td>
+          <td class="px-3 py-2">${(it.unit||'')}</td>
+          <td class="px-3 py-2 text-right">${fmtMoney(it.rate)}</td>
+          <td class="px-3 py-2 text-right">${fmtMoney((it.qty||0)*(it.rate||0))}</td>
+        </tr>
+      `).join('');
+      document.getElementById('itemsCard').innerHTML = `
+        <table class="min-w-full">
+          <thead class="bg-slate-50 text-slate-600">
+            <tr class="divide-x divide-slate-200">
+              <th class="px-3 py-2 text-left text-xs uppercase">#</th>
+              <th class="px-3 py-2 text-left text-xs uppercase">Description</th>
+              <th class="px-3 py-2 text-left text-xs uppercase">SKU</th>
+              <th class="px-3 py-2 text-right text-xs uppercase">Qty</th>
+              <th class="px-3 py-2 text-left text-xs uppercase">Unit</th>
+              <th class="px-3 py-2 text-right text-xs uppercase">Rate</th>
+              <th class="px-3 py-2 text-right text-xs uppercase">Amount</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200">${rows}</tbody>
+        </table>
+      `;
+
+      const link = document.getElementById('billLink');
+      if (run.billLink){
+        link.href = run.billLink;
+        link.classList.remove('hidden');
+      } else {
+        link.classList.add('hidden');
+      }
+    }
+
+    function kv(k, v){
+      return `
+        <div class="flex items-center justify-between py-1">
+          <div class="text-slate-500 text-sm">${k}</div>
+          <div class="text-slate-900 font-medium">${v}</div>
+        </div>
+      `;
+    }
+
+    async function init(){
+      const id = q('id');
+      if (!id){
+        document.getElementById('runCard').innerHTML = '<div class="text-slate-500">Missing id parameter.</div>';
+        return;
+      }
+      try {
+        const run = await apiGetRun(id);
+        renderRun(run);
+
+        document.getElementById('btnCreateDraft').addEventListener('click', async ()=>{
+          const msg = document.getElementById('actionMsg');
+          msg.textContent = 'Creating draft…';
+          try {
+            const out = await apiCreateDraft(id);
+            msg.textContent = out.mode === 'mock' ? 'Mock draft created.' : 'Draft created in Zoho.';
+            const run2 = await apiGetRun(id);
+            renderRun(run2);
+          } catch(e){
+            console.error(e);
+            msg.textContent = 'Failed to create draft.';
+          }
+        });
+
+      } catch (e){
+        document.getElementById('runCard').innerHTML = '<div class="text-slate-500">Run not found.</div>';
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
