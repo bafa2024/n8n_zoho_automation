@@ -17,24 +17,36 @@ const upload = multer({
 
 export const runsRouter = Router();
 
-runsRouter.get('/', (_req, res) => {
-  res.json({ runs: RunsRepo.list() });
+// List with pagination: GET /api/runs?limit=50&cursor=1699999999999
+runsRouter.get('/', (req, res) => {
+  const limit = Number(req.query.limit || 50);
+  const cursor = req.query.cursor ? Number(req.query.cursor) : undefined;
+  const { runs, nextCursor } = RunsRepo.listPage(limit, cursor);
+  res.json({ runs, nextCursor });
 });
 
+// View one
 runsRouter.get('/:id', (req, res) => {
   const run = RunsRepo.get(req.params.id);
   if (!run) return res.status(404).json({ error: 'not_found' });
   res.json({ run });
 });
 
-function coerceUnit(u: unknown): 'PC' | 'SET' | 'Unit' {
-  const s = String(u ?? 'PC').trim().toUpperCase();
-  if (s === 'PC' || s === 'PCS' || s === 'PIECE' || s === 'PIECES') return 'PC';
-  if (s === 'SET' || s === 'SETS') return 'SET';
-  if (s === 'UNIT' || s === 'UNITS' || s === 'EA' || s === 'EACH') return 'Unit';
-  return 'PC';
-}
+// Viewer: parsed snapshot
+runsRouter.get('/:id/parsed', (req, res) => {
+  const parsed = RunPayloadsRepo.getLatest(req.params.id, 'parsed');
+  if (!parsed) return res.status(404).json({ error: 'not_found' });
+  res.json({ parsed });
+});
 
+// Viewer: zoho request/response
+runsRouter.get('/:id/zoho', (req, res) => {
+  const pair = RunPayloadsRepo.getZohoPair(req.params.id);
+  if (!pair.request && !pair.response) return res.status(404).json({ error: 'not_found' });
+  res.json(pair);
+});
+
+// Ingest
 async function callParser(fileName: string, buf: Buffer) {
   if (!config.parserUrl) return null;
   try {
@@ -60,13 +72,7 @@ async function callParser(fileName: string, buf: Buffer) {
         disc?: number;
         tax?: number;
       }>;
-      totals: {
-        subtotal: number;
-        tax: number;
-        discount: number;
-        rounding: number;
-        total: number;
-      };
+      totals: { subtotal: number; tax: number; discount: number; rounding: number; total: number };
       anomalies: string[];
     };
   } catch (e) {
@@ -75,12 +81,17 @@ async function callParser(fileName: string, buf: Buffer) {
   }
 }
 
+function coerceUnit(u: unknown): 'PC' | 'SET' | 'Unit' {
+  const s = String(u ?? 'PC').trim().toUpperCase();
+  if (s === 'PC' || s === 'PCS' || s === 'PIECE' || s === 'PIECES') return 'PC';
+  if (s === 'SET' || s === 'SETS') return 'SET';
+  if (s === 'UNIT' || s === 'UNITS' || s === 'EA' || s === 'EACH') return 'Unit';
+  return 'PC';
+}
+
 runsRouter.post('/ingest', upload.single('file'), async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({
-      error: 'file_required',
-      message: 'multipart field "file" is required',
-    });
+    return res.status(400).json({ error: 'file_required', message: 'multipart field "file" is required' });
   }
 
   const buffer = req.file.buffer;
@@ -93,7 +104,6 @@ runsRouter.post('/ingest', upload.single('file'), async (req, res) => {
   }
 
   const original = safeName(req.file.originalname || 'upload.pdf');
-
   const parsed = await callParser(original, buffer);
 
   let run: Run;

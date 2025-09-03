@@ -4,41 +4,55 @@ import morgan from 'morgan';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from './config.js';
-import './db.js'; // initialize database and folders
+import './db.js';
 import { runsRouter } from './routes/runs.js';
 import { zohoRouter } from './routes/zoho.js';
+import { env } from './lib/env.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Middleware
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
 
+// Info endpoint (ops snapshot)
+app.get('/api/info', (_req, res) => {
+  res.json({
+    parser: { configured: Boolean(config.parserUrl), url: config.parserUrl || null },
+    zoho: {
+      mode: env.ZOHO_MODE || (env.ZOHO_ACCESS_TOKEN && env.ZOHO_ORG_ID ? 'live' : 'mock'),
+      orgIdPresent: Boolean(env.ZOHO_ORG_ID),
+      tokenPresent: Boolean(env.ZOHO_ACCESS_TOKEN),
+      apiDomain: env.ZOHO_API_DOMAIN,
+    },
+    storage: { dbPath: config.dbPath, uploadDir: config.uploadDir },
+    now: Date.now(),
+  });
+});
+
 // API routes
-app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 app.use('/api/runs', runsRouter);
 app.use('/api', zohoRouter);
 
-// Static site (frontend) from ../public
+// health
+app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
+
+// Static frontend
 const staticDir = path.join(__dirname, '..', 'public');
 app.use(express.static(staticDir, { index: false, maxAge: 0 }));
-app.get('/', (_req, res) => {
-  res.sendFile(path.join(staticDir, 'index.html'));
-});
+app.get('/', (_req, res) => res.sendFile(path.join(staticDir, 'index.html')));
 
+// 404s
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'not_found' });
-  }
+  if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'not_found' });
   return next();
 });
-
 app.use((_req, res) => res.status(404).send('Not found'));
 
+// errors
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err);
   res.status(500).json({ error: 'internal_error' });

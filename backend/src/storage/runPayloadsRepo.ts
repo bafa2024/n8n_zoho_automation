@@ -27,4 +27,9 @@ export const RunPayloadsRepo = {
     const row = latestByKindStmt.get(runId, kind) as { body_json: string } | undefined;
     return row ? JSON.parse(row.body_json) : null;
   },
+  getZohoPair(runId: string): { request: any | null; response: any | null } {
+    const request = this.getLatest(runId, 'zoho_request');
+    const response = this.getLatest(runId, 'zoho_response');
+    return { request, response };
+  },
 };

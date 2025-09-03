@@ -33,7 +33,9 @@ INSERT INTO runs (
   @notes_json, @created_at
 )`);
 
-const listStmt = db.prepare(`SELECT * FROM runs ORDER BY created_at DESC`);
+const listAllStmt = db.prepare(`SELECT * FROM runs ORDER BY created_at DESC`);
+const listPageNoCursor = db.prepare(`SELECT * FROM runs ORDER BY created_at DESC LIMIT ?`);
+const listPageWithCursor = db.prepare(`SELECT * FROM runs WHERE created_at < ? ORDER BY created_at DESC LIMIT ?`);
 const getStmt = db.prepare(`SELECT * FROM runs WHERE id = ?`);
 const findByHashStmt = db.prepare(`SELECT * FROM runs WHERE file_hash = ?`);
 const updateBillLinkStmt = db.prepare(`UPDATE runs SET bill_link = @bill_link WHERE id = @id`);
@@ -84,7 +86,16 @@ export const RunsRepo = {
     return run;
   },
   list(): Run[] {
-    return (listStmt.all() as RunRow[]).map(rowToRun);
+    return (listAllStmt.all() as RunRow[]).map(rowToRun);
+  },
+  listPage(limit: number, cursor?: number): { runs: Run[]; nextCursor: number | null } {
+    const lim = Math.max(1, Math.min(100, Math.floor(limit || 50)));
+    const rows: RunRow[] = cursor
+      ? (listPageWithCursor.all(cursor, lim) as RunRow[])
+      : (listPageNoCursor.all(lim) as RunRow[]);
+    const runs = rows.map(rowToRun);
+    const nextCursor = runs.length === lim ? runs[runs.length - 1].createdAt : null;
+    return { runs, nextCursor };
   },
   get(id: string): Run | null {
     const row = getStmt.get(id) as RunRow | undefined;
