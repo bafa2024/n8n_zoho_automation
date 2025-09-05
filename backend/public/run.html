@@ -27,13 +27,19 @@
 
     <div id="runCard" class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4"></div>
 
+   
     <div class="flex items-center gap-3 flex-wrap">
-      <button id="btnCreateDraft" class="rounded-xl bg-slate-900 text-white px-4 py-2">Create Draft Bill (mock/live)</button>
-      <button id="btnViewParsed" class="rounded-xl border border-slate-300 px-4 py-2">View parsed JSON</button>
-      <button id="btnViewZoho" class="rounded-xl border border-slate-300 px-4 py-2">View Zoho I/O</button>
+      <button id="btnCreateDraft" class="rounded-xl bg-slate-900 text-white px-4 py-2">Create Draft Bill</button>
+      <button id="btnViewParsed" class="rounded-xl border px-4 py-2">View parsed JSON</button>
+      <button id="btnViewZoho" class="rounded-xl border px-4 py-2">View Zoho I/O</button>
+      <a id="btnDownloadParsed" class="rounded-xl border px-4 py-2" download="parsed.json">Download parsed.json</a>
+      <a id="btnDownloadZoho" class="rounded-xl border px-4 py-2" download="zoho.json">Download zoho.json</a>
+      <a id="btnDownloadPDF" class="rounded-xl border px-4 py-2">Download PDF</a>
+      <button id="btnDelete" class="rounded-xl bg-red-600 text-white px-4 py-2">Delete Run</button>
       <a id="billLink" target="_blank" class="text-blue-700 underline hidden">Open Bill</a>
       <div id="actionMsg" class="text-slate-600 text-sm"></div>
     </div>
+    
 
     <div id="itemsCard" class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden"></div>
   </main>
