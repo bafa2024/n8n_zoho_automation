@@ -27,8 +27,10 @@
 
     <div id="runCard" class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4"></div>
 
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-3 flex-wrap">
       <button id="btnCreateDraft" class="rounded-xl bg-slate-900 text-white px-4 py-2">Create Draft Bill (mock/live)</button>
+      <button id="btnViewParsed" class="rounded-xl border border-slate-300 px-4 py-2">View parsed JSON</button>
+      <button id="btnViewZoho" class="rounded-xl border border-slate-300 px-4 py-2">View Zoho I/O</button>
       <a id="billLink" target="_blank" class="text-blue-700 underline hidden">Open Bill</a>
       <div id="actionMsg" class="text-slate-600 text-sm"></div>
     </div>
@@ -49,11 +51,20 @@
       const j = await r.json();
       return j.run;
     }
-
     async function apiCreateDraft(id){
       const r = await fetch(API_BASE + '/api/runs/' + encodeURIComponent(id) + '/zoho/draft', { method: 'POST' });
       if (!r.ok) throw new Error('draft failed');
       return await r.json();
+    }
+    async function apiViewParsed(id){
+      const r = await fetch(API_BASE + '/api/runs/' + encodeURIComponent(id) + '/parsed');
+      if (!r.ok) throw new Error('no parsed');
+      return await r.json(); // { parsed }
+    }
+    async function apiViewZoho(id){
+      const r = await fetch(API_BASE + '/api/runs/' + encodeURIComponent(id) + '/zoho');
+      if (!r.ok) throw new Error('no zoho payloads');
+      return await r.json(); // { request, response }
     }
 
     function renderRun(run){
@@ -132,6 +143,14 @@
       `;
     }
 
+    function openJsonWindow(obj, title){
+      const w = window.open('', '_blank');
+      const pretty = JSON.stringify(obj, null, 2);
+      w.document.write('<!doctype html><title>'+ (title||'JSON') +'</title><pre style="font: 12px/1.4 monospace; padding:16px; white-space:pre-wrap;">'+
+        pretty.replace(/</g,'&lt;') +'</pre>');
+      w.document.close();
+    }
+
     async function init(){
       const id = q('id');
       if (!id){
@@ -156,11 +175,28 @@
           }
         });
 
+        document.getElementById('btnViewParsed').addEventListener('click', async ()=>{
+          try {
+            const j = await apiViewParsed(id);
+            openJsonWindow(j.parsed, 'Parsed JSON');
+          } catch(e){
+            openJsonWindow({ error: 'No parsed snapshot found.' }, 'Parsed JSON');
+          }
+        });
+
+        document.getElementById('btnViewZoho').addEventListener('click', async ()=>{
+          try {
+            const j = await apiViewZoho(id);
+            openJsonWindow(j, 'Zoho I/O');
+          } catch(e){
+            openJsonWindow({ error: 'No Zoho payloads found yet. Click "Create Draft Bill" first.' }, 'Zoho I/O');
+          }
+        });
+
       } catch (e){
         document.getElementById('runCard').innerHTML = '<div class="text-slate-500">Run not found.</div>';
       }
     }
-
     init();
   </script>
 </body>

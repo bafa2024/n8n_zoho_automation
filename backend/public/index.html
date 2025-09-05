@@ -12,6 +12,7 @@
       <div class="flex items-center gap-3">
         <div class="h-8 w-8 rounded-xl bg-blue-600"></div>
         <div class="font-semibold text-slate-900">Zoho Bills Automation — Demo</div>
+        <span id="ver" class="ml-2 text-xs text-slate-500">v0.4.1.1</span>
       </div>
       <nav class="flex gap-1 rounded-xl bg-slate-100 p-1">
         <a class="px-3 py-1.5 rounded-lg text-sm bg-white shadow text-slate-900" href="index.html">Dashboard</a>
@@ -27,6 +28,7 @@
       <div class="flex items-start justify-between gap-4">
         <div>
           <div class="text-slate-900 font-semibold">Upload vendor bills (PDF)</div>
+
           <div class="text-slate-500 text-sm">Files are parsed server-side (or simulated if parser is off). Duplicates are detected by SHA-256.</div>
         </div>
         <div class="flex items-center gap-2">
@@ -55,19 +57,24 @@
           <tbody id="runsTbody" class="divide-y divide-slate-200 text-slate-800"></tbody>
         </table>
       </div>
+      <div class="flex justify-center my-4">
+        <button id="loadMore" class="rounded-xl border border-slate-300 px-4 py-2 text-sm">Load more</button>
+      </div>
     </div>
   </main>
 
   <script>
     const API_DEFAULT = 'http://localhost:5050';
     const API_BASE = (localStorage.getItem('API_BASE') || API_DEFAULT).replace(/\/$/, '');
-
     const STATUS = {
       success: { label: "Success", chip: "bg-green-100 text-green-800 border-green-200" },
       warning: { label: "Warning", chip: "bg-amber-100 text-amber-800 border-amber-200" },
       error:   { label: "Error",   chip: "bg-red-100 text-red-800 border-red-200" },
       pending: { label: "Pending", chip: "bg-slate-100 text-slate-700 border-slate-200" },
     };
+
+    let nextCursor = null;
+    const PAGE_SIZE = 30;
 
     function fmtMoney(n){ return (n||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); }
     function ago(ts){
@@ -82,11 +89,13 @@
       return s + 's ago';
     }
 
-    async function apiListRuns(){
-      const r = await fetch(API_BASE + '/api/runs');
+    async function apiListRuns(limit, cursor){
+      const u = new URL(API_BASE + '/api/runs');
+      if (limit) u.searchParams.set('limit', String(limit));
+      if (cursor) u.searchParams.set('cursor', String(cursor));
+      const r = await fetch(u.toString());
       if (!r.ok) throw new Error('list failed');
-      const j = await r.json();
-      return j.runs || [];
+      return await r.json(); // {runs, nextCursor}
     }
 
     async function apiIngest(file){
@@ -97,9 +106,9 @@
       return await r.json();
     }
 
-    function renderRuns(runs){
+    function renderRuns(runs, append=false){
       const tb = document.getElementById('runsTbody');
-      tb.innerHTML = '';
+      if (!append) tb.innerHTML = '';
       for (const run of runs){
         const st = STATUS[run.status] || STATUS.pending;
         const itemsCount = (run.items||[]).length;
@@ -124,7 +133,33 @@
       }
     }
 
-    async function init(){
+    async function loadInitial(){
+      try {
+        const { runs, nextCursor: nc } = await apiListRuns(PAGE_SIZE, null);
+        renderRuns(runs, false);
+        nextCursor = nc;
+        document.getElementById('loadMore').disabled = !nextCursor;
+      } catch(e){
+        document.getElementById('runsTbody').innerHTML = '<tr><td class="px-4 py-8 text-slate-500" colspan="7">Could not reach API at '+API_BASE+'.</td></tr>';
+      }
+    }
+
+    async function loadMore(){
+      if (!nextCursor) return;
+      const btn = document.getElementById('loadMore');
+      btn.textContent = 'Loading…';
+      btn.disabled = true;
+      try {
+        const { runs, nextCursor: nc } = await apiListRuns(PAGE_SIZE, nextCursor);
+        renderRuns(runs, true);
+        nextCursor = nc;
+      } finally {
+        btn.textContent = nextCursor ? 'Load more' : 'No more';
+        btn.disabled = !nextCursor;
+      }
+    }
+
+    function init(){
       document.getElementById('selectFiles').addEventListener('click', ()=> document.getElementById('fileInput').click());
       document.getElementById('fileInput').addEventListener('change', async (e)=>{
         const out = document.getElementById('uploadStatus');
@@ -137,17 +172,11 @@
           catch(err){ console.error(err); fail++; }
         }
         out.textContent = 'Done. ' + ok + ' uploaded' + (fail? (', '+fail+' failed'):'') + '.';
-        const runs = await apiListRuns();
-        renderRuns(runs);
+        await loadInitial();
         e.target.value = '';
       });
-
-      try {
-        const runs = await apiListRuns();
-        renderRuns(runs);
-      } catch (e){
-        document.getElementById('runsTbody').innerHTML = '<tr><td class="px-4 py-8 text-slate-500" colspan="7">Could not reach API at '+API_BASE+'. Check that the backend is running.</td></tr>';
-      }
+      document.getElementById('loadMore').addEventListener('click', loadMore);
+      loadInitial();
     }
     init();
   </script>
