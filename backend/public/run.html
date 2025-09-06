@@ -14,194 +14,61 @@
         <div class="font-semibold text-slate-900">Zoho Bills Automation — Demo</div>
       </div>
       <nav class="flex gap-1 rounded-xl bg-slate-100 p-1">
-        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="index.html">Dashboard</a>
-        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="settings.html">Settings</a>
-        <a class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:text-slate-900" href="logs.html">Logs</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm" href="index.html">Dashboard</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm" href="settings.html">Settings</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm" href="logs.html">Logs</a>
       </nav>
-      <div></div>
     </div>
   </div>
 
   <main class="mx-auto max-w-7xl p-4 space-y-6">
     <a href="index.html" class="text-blue-700 underline">&larr; Back</a>
+    <div id="runCard" class="rounded-2xl border p-4 bg-white"></div>
 
-    <div id="runCard" class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4"></div>
-
-   
-    <div class="flex items-center gap-3 flex-wrap">
-      <button id="btnCreateDraft" class="rounded-xl bg-slate-900 text-white px-4 py-2">Create Draft Bill</button>
-      <button id="btnViewParsed" class="rounded-xl border px-4 py-2">View parsed JSON</button>
-      <button id="btnViewZoho" class="rounded-xl border px-4 py-2">View Zoho I/O</button>
-      <a id="btnDownloadParsed" class="rounded-xl border px-4 py-2" download="parsed.json">Download parsed.json</a>
-      <a id="btnDownloadZoho" class="rounded-xl border px-4 py-2" download="zoho.json">Download zoho.json</a>
-      <a id="btnDownloadPDF" class="rounded-xl border px-4 py-2">Download PDF</a>
-      <button id="btnDelete" class="rounded-xl bg-red-600 text-white px-4 py-2">Delete Run</button>
+    <div class="flex gap-2 flex-wrap">
+      <button id="btnCreateDraft" class="rounded bg-slate-900 text-white px-4 py-2">Create Draft Bill</button>
+      <button id="btnViewParsed" class="rounded border px-4 py-2">View parsed JSON</button>
+      <button id="btnViewZoho" class="rounded border px-4 py-2">View Zoho I/O</button>
+      <a id="btnDownloadParsed" class="rounded border px-4 py-2" download="parsed.json">Download parsed.json</a>
+      <a id="btnDownloadZoho" class="rounded border px-4 py-2" download="zoho.json">Download zoho.json</a>
+      <a id="btnDownloadPDF" class="rounded border px-4 py-2">Download PDF</a>
+      <button id="btnDelete" class="rounded bg-red-600 text-white px-4 py-2">Delete Run</button>
       <a id="billLink" target="_blank" class="text-blue-700 underline hidden">Open Bill</a>
-      <div id="actionMsg" class="text-slate-600 text-sm"></div>
+      <div id="actionMsg" class="text-sm text-slate-600"></div>
     </div>
-    
 
-    <div id="itemsCard" class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden"></div>
+    <div id="itemsCard" class="rounded-2xl border bg-white"></div>
   </main>
 
   <script>
-    const API_DEFAULT = 'http://localhost:5050';
-    const API_BASE = (localStorage.getItem('API_BASE') || API_DEFAULT).replace(/\/$/, '');
+    const API_BASE = (localStorage.getItem('API_BASE') || 'http://localhost:5050').replace(/\/$/,'');
 
     function q(k){ return new URLSearchParams(location.search).get(k); }
-    function fmtMoney(n){ return (n||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); }
-
-    async function apiGetRun(id){
-      const r = await fetch(API_BASE + '/api/runs/' + encodeURIComponent(id));
-      if (!r.ok) throw new Error('not found');
-      const j = await r.json();
-      return j.run;
-    }
-    async function apiCreateDraft(id){
-      const r = await fetch(API_BASE + '/api/runs/' + encodeURIComponent(id) + '/zoho/draft', { method: 'POST' });
-      if (!r.ok) throw new Error('draft failed');
-      return await r.json();
-    }
-    async function apiViewParsed(id){
-      const r = await fetch(API_BASE + '/api/runs/' + encodeURIComponent(id) + '/parsed');
-      if (!r.ok) throw new Error('no parsed');
-      return await r.json(); // { parsed }
-    }
-    async function apiViewZoho(id){
-      const r = await fetch(API_BASE + '/api/runs/' + encodeURIComponent(id) + '/zoho');
-      if (!r.ok) throw new Error('no zoho payloads');
-      return await r.json(); // { request, response }
+    function openJsonWindow(obj,title){
+      const w=window.open('', '_blank');
+      w.document.write('<pre>'+JSON.stringify(obj,null,2)+'</pre>');
     }
 
-    function renderRun(run){
-      const statusChip = {
-        success: 'bg-green-100 text-green-800 border-green-200',
-        warning: 'bg-amber-100 text-amber-800 border-amber-200',
-        error:   'bg-red-100 text-red-800 border-red-200',
-        pending: 'bg-slate-100 text-slate-700 border-slate-200',
-      }[run.status] || 'bg-slate-100 text-slate-700 border-slate-200';
-
-      document.getElementById('runCard').innerHTML = `
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <div class="font-semibold text-slate-900">Run <span class="font-mono">${run.id}</span></div>
-            <div class="text-slate-500 text-sm">File: ${run.file}</div>
-          </div>
-          <div><span class="text-xs px-2 py-1 rounded-full border ${statusChip}">${run.status}</span></div>
-        </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-          ${kv('Invoice No.', run.invoiceNo || '—')}
-          ${kv('Vendor', run.vendor || '—')}
-          ${kv('Date', run.date || '—')}
-          ${kv('Terms', run.terms || '—')}
-          ${kv('Agent', run.agent || '—')}
-          ${kv('Subtotal', fmtMoney(run.totals?.subtotal))}
-          ${kv('Tax', fmtMoney(run.totals?.tax))}
-          ${kv('Total', fmtMoney(run.totals?.total))}
-        </div>
-        ${run.notes && run.notes.length ? '<div class="mt-3 text-sm text-amber-700"><b>Notes:</b> ' + run.notes.join('; ') + '</div>' : ''}
-      `;
-
-      const items = run.items || [];
-      const rows = items.map((it,i)=>`
-        <tr class="divide-x divide-slate-200">
-          <td class="px-3 py-2 text-sm">${i+1}</td>
-          <td class="px-3 py-2">${(it.desc||'')}</td>
-          <td class="px-3 py-2 font-mono text-sm">${(it.sku||'')}</td>
-          <td class="px-3 py-2 text-right">${(it.qty||0)}</td>
-          <td class="px-3 py-2">${(it.unit||'')}</td>
-          <td class="px-3 py-2 text-right">${fmtMoney(it.rate)}</td>
-          <td class="px-3 py-2 text-right">${fmtMoney((it.qty||0)*(it.rate||0))}</td>
-        </tr>
-      `).join('');
-      document.getElementById('itemsCard').innerHTML = `
-        <table class="min-w-full">
-          <thead class="bg-slate-50 text-slate-600">
-            <tr class="divide-x divide-slate-200">
-              <th class="px-3 py-2 text-left text-xs uppercase">#</th>
-              <th class="px-3 py-2 text-left text-xs uppercase">Description</th>
-              <th class="px-3 py-2 text-left text-xs uppercase">SKU</th>
-              <th class="px-3 py-2 text-right text-xs uppercase">Qty</th>
-              <th class="px-3 py-2 text-left text-xs uppercase">Unit</th>
-              <th class="px-3 py-2 text-right text-xs uppercase">Rate</th>
-              <th class="px-3 py-2 text-right text-xs uppercase">Amount</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-200">${rows}</tbody>
-        </table>
-      `;
-
-      const link = document.getElementById('billLink');
-      if (run.billLink){
-        link.href = run.billLink;
-        link.classList.remove('hidden');
-      } else {
-        link.classList.add('hidden');
-      }
-    }
-
-    function kv(k, v){
-      return `
-        <div class="flex items-center justify-between py-1">
-          <div class="text-slate-500 text-sm">${k}</div>
-          <div class="text-slate-900 font-medium">${v}</div>
-        </div>
-      `;
-    }
-
-    function openJsonWindow(obj, title){
-      const w = window.open('', '_blank');
-      const pretty = JSON.stringify(obj, null, 2);
-      w.document.write('<!doctype html><title>'+ (title||'JSON') +'</title><pre style="font: 12px/1.4 monospace; padding:16px; white-space:pre-wrap;">'+
-        pretty.replace(/</g,'&lt;') +'</pre>');
-      w.document.close();
-    }
+    async function apiGetRun(id){ return (await fetch(API_BASE+'/api/runs/'+id)).json().then(j=>j.run); }
+    async function apiCreateDraft(id){ return (await fetch(API_BASE+'/api/runs/'+id+'/zoho/draft',{method:'POST'})).json(); }
+    async function apiViewParsed(id){ return (await fetch(API_BASE+'/api/runs/'+id+'/parsed')).json(); }
+    async function apiViewZoho(id){ return (await fetch(API_BASE+'/api/runs/'+id+'/zoho')).json(); }
+    async function apiDeleteRun(id){ return (await fetch(API_BASE+'/api/runs/'+id,{method:'DELETE'})).json(); }
 
     async function init(){
       const id = q('id');
-      if (!id){
-        document.getElementById('runCard').innerHTML = '<div class="text-slate-500">Missing id parameter.</div>';
-        return;
-      }
-      try {
-        const run = await apiGetRun(id);
-        renderRun(run);
+      const run = await apiGetRun(id);
+      document.getElementById('runCard').textContent = 'Run '+run.id+' — Vendor: '+run.vendor;
 
-        document.getElementById('btnCreateDraft').addEventListener('click', async ()=>{
-          const msg = document.getElementById('actionMsg');
-          msg.textContent = 'Creating draft…';
-          try {
-            const out = await apiCreateDraft(id);
-            msg.textContent = out.mode === 'mock' ? 'Mock draft created.' : 'Draft created in Zoho.';
-            const run2 = await apiGetRun(id);
-            renderRun(run2);
-          } catch(e){
-            console.error(e);
-            msg.textContent = 'Failed to create draft.';
-          }
-        });
-
-        document.getElementById('btnViewParsed').addEventListener('click', async ()=>{
-          try {
-            const j = await apiViewParsed(id);
-            openJsonWindow(j.parsed, 'Parsed JSON');
-          } catch(e){
-            openJsonWindow({ error: 'No parsed snapshot found.' }, 'Parsed JSON');
-          }
-        });
-
-        document.getElementById('btnViewZoho').addEventListener('click', async ()=>{
-          try {
-            const j = await apiViewZoho(id);
-            openJsonWindow(j, 'Zoho I/O');
-          } catch(e){
-            openJsonWindow({ error: 'No Zoho payloads found yet. Click "Create Draft Bill" first.' }, 'Zoho I/O');
-          }
-        });
-
-      } catch (e){
-        document.getElementById('runCard').innerHTML = '<div class="text-slate-500">Run not found.</div>';
-      }
+      document.getElementById('btnCreateDraft').onclick=async()=>{
+        await apiCreateDraft(id); alert('Draft created (mock)');
+      };
+      document.getElementById('btnViewParsed').onclick=async()=>openJsonWindow(await apiViewParsed(id),'Parsed');
+      document.getElementById('btnViewZoho').onclick=async()=>openJsonWindow(await apiViewZoho(id),'Zoho');
+      document.getElementById('btnDownloadParsed').href=API_BASE+'/api/runs/'+id+'/parsed';
+      document.getElementById('btnDownloadZoho').href=API_BASE+'/api/runs/'+id+'/zoho';
+      document.getElementById('btnDownloadPDF').href=API_BASE+'/api/runs/'+id+'/file';
+      document.getElementById('btnDelete').onclick=async()=>{ await apiDeleteRun(id); location.href='index.html'; };
     }
     init();
   </script>

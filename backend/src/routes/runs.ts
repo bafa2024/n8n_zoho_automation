@@ -10,6 +10,7 @@ import { config } from '../config.js';
 import { RunPayloadsRepo } from '../storage/runPayloadsRepo.js';
 import type { LineItem, Run } from '../lib/types.js';
 import { newRunId } from '../lib/id.js';
+import { db } from '../db.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -17,6 +18,66 @@ const upload = multer({
 });
 
 export const runsRouter = Router();
+
+// Parser response type
+type ParserResponse = {
+  header?: {
+    invoiceNo?: string;
+    bill_number?: string;
+    vendor?: string;
+    billTo?: string;
+    shipTo?: string;
+    date?: string;
+    terms?: number;
+    agent?: string;
+  };
+  items?: Array<{
+    desc?: string;
+    description?: string;
+    sku?: string;
+    qty?: number;
+    unit?: string;
+    rate?: number;
+    disc?: number;
+    tax?: number;
+  }>;
+  totals?: {
+    subtotal: number;
+    tax: number;
+    discount: number;
+    rounding: number;
+    total: number;
+  };
+  anomalies?: string[];
+};
+
+// Helper: coerce units
+function coerceUnit(u: unknown): 'PC' | 'SET' | 'Unit' {
+  const s = String(u ?? 'PC').trim().toUpperCase();
+  if (s.startsWith('PC')) return 'PC';
+  if (s.startsWith('SET')) return 'SET';
+  return 'Unit';
+}
+
+// Parser call
+async function callParser(fileName: string, buf: Buffer): Promise<ParserResponse | null> {
+  if (!config.parserUrl) return null;
+  try {
+    const form = new FormData();
+    const blob = new Blob([buf], { type: 'application/pdf' });
+    form.append('file', blob, fileName);
+
+    const resp = await fetch(`${config.parserUrl.replace(/\/+$/, '')}/parse`, {
+      method: 'POST',
+      body: form as any,
+    });
+    if (!resp.ok) throw new Error(`parser ${resp.status}`);
+    return (await resp.json()) as ParserResponse;
+  } catch (e) {
+    console.error('parser failed:', e);
+    return null;
+  }
+}
 
 // List with pagination
 runsRouter.get('/', (req, res) => {
@@ -56,46 +117,19 @@ runsRouter.get('/:id/file', (req, res) => {
   res.download(storedPath, run.file);
 });
 
-// Delete run (row + payloads + file)
+// Delete run
 runsRouter.delete('/:id', (req, res) => {
   const run = RunsRepo.get(req.params.id);
   if (!run) return res.status(404).json({ error: 'not_found' });
 
-  // remove file
   const storedPath = path.join(config.uploadDir, `${run.id}-${run.file}`);
   if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
 
-  // remove from DB
-  const db = require('../db.js').db;
   db.prepare('DELETE FROM run_payloads WHERE run_id = ?').run(run.id);
   db.prepare('DELETE FROM runs WHERE id = ?').run(run.id);
 
   res.json({ ok: true, deleted: run.id });
 });
-
-// Helper: coerce units
-function coerceUnit(u: unknown): 'PC' | 'SET' | 'Unit' {
-  const s = String(u ?? 'PC').trim().toUpperCase();
-  if (s.startsWith('PC')) return 'PC';
-  if (s.startsWith('SET')) return 'SET';
-  return 'Unit';
-}
-
-// Parser call
-async function callParser(fileName: string, buf: Buffer) {
-  if (!config.parserUrl) return null;
-  try {
-    const form = new FormData();
-    const blob = new Blob([buf], { type: 'application/pdf' });
-    form.append('file', blob, fileName);
-    const resp = await fetch(`${config.parserUrl.replace(/\/+$/, '')}/parse`, { method: 'POST', body: form as any });
-    if (!resp.ok) throw new Error(`parser ${resp.status}`);
-    return await resp.json();
-  } catch (e) {
-    console.error('parser failed:', e);
-    return null;
-  }
-}
 
 // Ingest
 runsRouter.post('/ingest', upload.single('file'), async (req, res) => {
@@ -124,10 +158,11 @@ runsRouter.post('/ingest', upload.single('file'), async (req, res) => {
       disc: Number(it.disc ?? 0),
       tax: Number(it.tax ?? 0),
     }));
+
     run = {
       id: newRunId(),
       status: 'success',
-      invoiceNo: parsed.header?.invoiceNo ?? 'I-PARSED-0001',
+      invoiceNo: parsed.header?.invoiceNo ?? parsed.header?.bill_number ?? 'I-PARSED-0001',
       vendor: parsed.header?.vendor ?? 'UNKNOWN',
       billTo: parsed.header?.billTo ?? null,
       shipTo: parsed.header?.shipTo ?? null,
@@ -135,13 +170,14 @@ runsRouter.post('/ingest', upload.single('file'), async (req, res) => {
       terms: parsed.header?.terms ?? null,
       agent: parsed.header?.agent ?? null,
       items,
-      totals: parsed.totals,
+      totals: parsed.totals || { subtotal: 0, tax: 0, discount: 0, rounding: 0, total: 0 },
       billLink: null,
       duration: 6,
       file: original,
       notes: parsed.anomalies ?? [],
       createdAt: Date.now(),
     };
+
     RunPayloadsRepo.add(run.id, 'parsed', parsed);
   } else {
     run = simulateRunFromFile(original);

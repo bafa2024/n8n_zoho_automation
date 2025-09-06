@@ -7,12 +7,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-100">
+  <!-- Nav -->
   <div class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-slate-200">
     <div class="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <div class="h-8 w-8 rounded-xl bg-blue-600"></div>
         <div class="font-semibold text-slate-900">Zoho Bills Automation — Demo</div>
-        <span id="ver" class="ml-2 text-xs text-slate-500">v0.4.1.1</span>
       </div>
       <nav class="flex gap-1 rounded-xl bg-slate-100 p-1">
         <a class="px-3 py-1.5 rounded-lg text-sm bg-white shadow text-slate-900" href="index.html">Dashboard</a>
@@ -26,7 +26,7 @@
   <main class="mx-auto max-w-7xl p-4 space-y-8">
     <!-- Status banner -->
     <div id="statusBanner" class="rounded-xl bg-slate-200 px-3 py-2 text-sm text-slate-800"></div>
-  
+
     <!-- Upload -->
     <div id="dropZone" class="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-6 text-center">
       <p class="text-slate-900 font-semibold">Drag & drop PDFs or click to upload</p>
@@ -34,7 +34,7 @@
       <button id="selectFiles" class="mt-2 rounded-xl bg-slate-900 text-white px-4 py-2">Browse</button>
       <div id="uploadStatus" class="mt-2 text-sm text-slate-600"></div>
     </div>
-  
+
     <!-- Runs table -->
     <div>
       <div class="mb-2 text-slate-900 font-semibold">Recent runs</div>
@@ -60,32 +60,18 @@
       </div>
     </div>
   </main>
-  
 
   <script>
     const API_DEFAULT = 'http://localhost:5050';
     const API_BASE = (localStorage.getItem('API_BASE') || API_DEFAULT).replace(/\/$/, '');
-    const STATUS = {
-      success: { label: "Success", chip: "bg-green-100 text-green-800 border-green-200" },
-      warning: { label: "Warning", chip: "bg-amber-100 text-amber-800 border-amber-200" },
-      error:   { label: "Error",   chip: "bg-red-100 text-red-800 border-red-200" },
-      pending: { label: "Pending", chip: "bg-slate-100 text-slate-700 border-slate-200" },
-    };
 
     let nextCursor = null;
-    const PAGE_SIZE = 30;
+    let prevCursors = [];
+    const PAGE_SIZE = 20;
 
-    function fmtMoney(n){ return (n||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); }
-    function ago(ts){
-      const d = Date.now() - Number(ts||0);
-      const s = Math.floor(d/1000);
-      const m = Math.floor(s/60);
-      const h = Math.floor(m/60);
-      const day = Math.floor(h/24);
-      if (day>0) return day + (day===1?' day':' days') + ' ago';
-      if (h>0) return h + (h===1?' hour':' hours') + ' ago';
-      if (m>0) return m + (m===1?' min':' mins') + ' ago';
-      return s + 's ago';
+    async function apiInfo(){
+      const r = await fetch(API_BASE + '/api/info');
+      return r.json();
     }
 
     async function apiListRuns(limit, cursor){
@@ -93,89 +79,90 @@
       if (limit) u.searchParams.set('limit', String(limit));
       if (cursor) u.searchParams.set('cursor', String(cursor));
       const r = await fetch(u.toString());
-      if (!r.ok) throw new Error('list failed');
-      return await r.json(); // {runs, nextCursor}
+      return await r.json();
     }
 
     async function apiIngest(file){
       const fd = new FormData();
       fd.append('file', file, file.name || 'upload.pdf');
       const r = await fetch(API_BASE + '/api/runs/ingest', { method: 'POST', body: fd });
-      if (!r.ok) throw new Error('ingest failed ' + r.status);
       return await r.json();
     }
 
-    function renderRuns(runs, append=false){
+    function ago(ts){
+      const d = Date.now() - Number(ts||0);
+      const s = Math.floor(d/1000);
+      const m = Math.floor(s/60);
+      const h = Math.floor(m/60);
+      const day = Math.floor(h/24);
+      if (day>0) return day+'d ago';
+      if (h>0) return h+'h ago';
+      if (m>0) return m+'m ago';
+      return s+'s ago';
+    }
+
+    function renderRuns(runs){
       const tb = document.getElementById('runsTbody');
-      if (!append) tb.innerHTML = '';
+      tb.innerHTML = '';
       for (const run of runs){
-        const st = STATUS[run.status] || STATUS.pending;
-        const itemsCount = (run.items||[]).length;
-        const bill = run.billLink ? '<a href="'+run.billLink+'" target="_blank" class="text-blue-700 underline">Open</a>' : '<span class="text-slate-500">—</span>';
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-slate-50 cursor-pointer';
         tr.innerHTML = `
           <td class="px-4 py-2 font-mono text-sm text-blue-700 underline">${run.id}</td>
-          <td class="px-4 py-2">${run.invoiceNo || '<span class="text-slate-500">—</span>'}</td>
-          <td class="px-4 py-2">${run.vendor || '<span class="text-slate-500">—</span>'}</td>
-          <td class="px-4 py-2"><span class="text-xs px-2 py-1 rounded-full border ${st.chip}">${st.label}</span></td>
-          <td class="px-4 py-2">${itemsCount}</td>
-          <td class="px-4 py-2">${bill}</td>
-          <td class="px-4 py-2 text-slate-500">${ago(run.createdAt)}</td>
+          <td class="px-4 py-2">${run.invoiceNo || '—'}</td>
+          <td class="px-4 py-2">${run.vendor || '—'}</td>
+          <td class="px-4 py-2">${run.status}</td>
+          <td class="px-4 py-2">${(run.items||[]).length}</td>
+          <td class="px-4 py-2">${run.billLink ? '<a href="'+run.billLink+'" target="_blank">Open</a>' : '—'}</td>
+          <td class="px-4 py-2">${ago(run.createdAt)}</td>
         `;
         tr.addEventListener('click', (e)=>{
-          const a = e.target.closest('a');
-          if (a) return;
-          location.href = 'run.html?id=' + encodeURIComponent(run.id);
+          if (!e.target.closest('a')){
+            location.href = 'run.html?id=' + run.id;
+          }
         });
         tb.appendChild(tr);
       }
     }
 
-    async function loadInitial(){
-      try {
-        const { runs, nextCursor: nc } = await apiListRuns(PAGE_SIZE, null);
-        renderRuns(runs, false);
-        nextCursor = nc;
-        document.getElementById('loadMore').disabled = !nextCursor;
-      } catch(e){
-        document.getElementById('runsTbody').innerHTML = '<tr><td class="px-4 py-8 text-slate-500" colspan="7">Could not reach API at '+API_BASE+'.</td></tr>';
-      }
+    async function loadPage(cursor, back=false){
+      const { runs, nextCursor: nc } = await apiListRuns(PAGE_SIZE, cursor);
+      renderRuns(runs);
+      nextCursor = nc;
+      if (!back && cursor) prevCursors.push(cursor);
+      document.getElementById('prevPage').disabled = prevCursors.length===0;
+      document.getElementById('nextPage').disabled = !nextCursor;
     }
 
-    async function loadMore(){
-      if (!nextCursor) return;
-      const btn = document.getElementById('loadMore');
-      btn.textContent = 'Loading…';
-      btn.disabled = true;
-      try {
-        const { runs, nextCursor: nc } = await apiListRuns(PAGE_SIZE, nextCursor);
-        renderRuns(runs, true);
-        nextCursor = nc;
-      } finally {
-        btn.textContent = nextCursor ? 'Load more' : 'No more';
-        btn.disabled = !nextCursor;
-      }
-    }
-
-    function init(){
-      document.getElementById('selectFiles').addEventListener('click', ()=> document.getElementById('fileInput').click());
-      document.getElementById('fileInput').addEventListener('change', async (e)=>{
-        const out = document.getElementById('uploadStatus');
-        const files = Array.from(e.target.files||[]);
-        if (!files.length) return;
-        let ok=0, fail=0;
-        for (const f of files){
-          out.textContent = 'Uploading ' + f.name + ' …';
-          try { await apiIngest(f); ok++; }
-          catch(err){ console.error(err); fail++; }
-        }
-        out.textContent = 'Done. ' + ok + ' uploaded' + (fail? (', '+fail+' failed'):'') + '.';
-        await loadInitial();
-        e.target.value = '';
+    function initUpload(){
+      const dz = document.getElementById('dropZone');
+      const input = document.getElementById('fileInput');
+      dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('bg-slate-50'); });
+      dz.addEventListener('dragleave', e=>{ dz.classList.remove('bg-slate-50'); });
+      dz.addEventListener('drop', async e=>{
+        e.preventDefault(); dz.classList.remove('bg-slate-50');
+        const files = Array.from(e.dataTransfer.files);
+        for (const f of files){ await apiIngest(f); }
+        loadPage(null);
       });
-      document.getElementById('loadMore').addEventListener('click', loadMore);
-      loadInitial();
+      document.getElementById('selectFiles').addEventListener('click', ()=> input.click());
+      input.addEventListener('change', async e=>{
+        for (const f of e.target.files){ await apiIngest(f); }
+        loadPage(null);
+      });
+    }
+
+    async function init(){
+      const info = await apiInfo();
+      document.getElementById('statusBanner').textContent =
+        `Zoho: ${info.zoho.mode} | Parser: ${info.parser.configured?'on':'off'}`;
+      initUpload();
+      await loadPage(null);
+      document.getElementById('nextPage').addEventListener('click', ()=> loadPage(nextCursor));
+      document.getElementById('prevPage').addEventListener('click', ()=> {
+        const prev = prevCursors.pop();
+        loadPage(prev, true);
+      });
     }
     init();
   </script>
