@@ -34,7 +34,10 @@
     const API_BASE = (localStorage.getItem('API_BASE') || API_DEFAULT).replace(/\/$/, '');
     async function check(){
       try{
-        const r = await fetch(API_BASE + '/api/health');
+        const headers = {};
+        const token = localStorage.getItem('API_TOKEN');
+        if (token) headers['X-Auth-Token'] = token;
+        const r = await fetch(API_BASE + '/api/health', { headers });
         const j = await r.json();
         document.getElementById('health').textContent = 'OK: ' + JSON.stringify(j);
       } catch(e){

@@ -31,6 +31,13 @@
         <button id="save" class="rounded-xl bg-slate-900 text-white px-4 py-2">Save</button>
         <button id="reset" class="rounded-xl border border-slate-300 px-4 py-2">Reset</button>
       </div>
+      
+      <div class="mt-4">
+        <div class="text-slate-700 text-sm font-medium mb-1">Auth Token</div>
+        <div class="text-slate-500 text-xs mb-2">Optional authentication token for API requests</div>
+        <input id="apiToken" type="password" class="w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="Enter auth token (optional)" />
+      </div>
+      
       <div id="msg" class="mt-2 text-sm text-slate-600"></div>
     </div>
   </main>
@@ -38,15 +45,30 @@
   <script>
     function init(){
       const input = document.getElementById('apiBase');
+      const tokenInput = document.getElementById('apiToken');
+      
       input.value = localStorage.getItem('API_BASE') || 'http://localhost:5050';
+      tokenInput.value = localStorage.getItem('API_TOKEN') || '';
+      
       document.getElementById('save').addEventListener('click', ()=>{
         const v = input.value.trim().replace(/\/$/, '');
+        const token = tokenInput.value.trim();
+        
         localStorage.setItem('API_BASE', v);
+        if (token) {
+          localStorage.setItem('API_TOKEN', token);
+        } else {
+          localStorage.removeItem('API_TOKEN');
+        }
+        
         document.getElementById('msg').textContent = 'Saved. Open Dashboard to test.';
       });
+      
       document.getElementById('reset').addEventListener('click', ()=>{
         localStorage.removeItem('API_BASE');
+        localStorage.removeItem('API_TOKEN');
         input.value = 'http://localhost:5050';
+        tokenInput.value = '';
         document.getElementById('msg').textContent = 'Reset to default.';
       });
     }

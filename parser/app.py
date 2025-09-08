@@ -73,3 +73,7 @@ async def parse(file: UploadFile = File(...)):
     )
     anomalies: list[str] = []
     return ParseResult(header=header, items=items, totals=totals, anomalies=anomalies)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=7071)

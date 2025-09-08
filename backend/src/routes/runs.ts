@@ -87,6 +87,36 @@ runsRouter.get('/', (req, res) => {
   res.json({ runs, nextCursor });
 });
 
+// Export all runs as CSV
+runsRouter.get('/export', (req, res) => {
+  const runs = RunsRepo.list();
+  
+  // Build CSV string
+  let csv = 'id,invoiceNo,vendor,status,total\n';
+  for (const run of runs) {
+    const id = run.id || '';
+    const invoiceNo = run.invoiceNo || '';
+    const vendor = run.vendor || '';
+    const status = run.status || '';
+    const total = run.totals?.total ?? 0;
+    
+    // Escape values that contain commas, quotes, or newlines
+    const escapeCSV = (val: string | number) => {
+      const str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    
+    csv += `${escapeCSV(id)},${escapeCSV(invoiceNo)},${escapeCSV(vendor)},${escapeCSV(status)},${escapeCSV(total)}\n`;
+  }
+  
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="runs.csv"');
+  res.send(csv);
+});
+
 // View one
 runsRouter.get('/:id', (req, res) => {
   const run = RunsRepo.get(req.params.id);
@@ -177,8 +207,6 @@ runsRouter.post('/ingest', upload.single('file'), async (req, res) => {
       notes: parsed.anomalies ?? [],
       createdAt: Date.now(),
     };
-
-    RunPayloadsRepo.add(run.id, 'parsed', parsed);
   } else {
     run = simulateRunFromFile(original);
   }
@@ -186,5 +214,11 @@ runsRouter.post('/ingest', upload.single('file'), async (req, res) => {
   const storedName = `${run.id}-${original}`;
   await saveBuffer(config.uploadDir, storedName, buffer);
   RunsRepo.add(run, fileHash, storedName);
+  
+  // Add payload after the run is saved to avoid foreign key constraint errors
+  if (parsed) {
+    RunPayloadsRepo.add(run.id, 'parsed', parsed);
+  }
+  
   res.status(201).json(run);
 });

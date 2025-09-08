@@ -70,7 +70,10 @@
     const PAGE_SIZE = 20;
 
     async function apiInfo(){
-      const r = await fetch(API_BASE + '/api/info');
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      const r = await fetch(API_BASE + '/api/info', { headers });
       return r.json();
     }
 
@@ -78,14 +81,20 @@
       const u = new URL(API_BASE + '/api/runs');
       if (limit) u.searchParams.set('limit', String(limit));
       if (cursor) u.searchParams.set('cursor', String(cursor));
-      const r = await fetch(u.toString());
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      const r = await fetch(u.toString(), { headers });
       return await r.json();
     }
 
     async function apiIngest(file){
       const fd = new FormData();
       fd.append('file', file, file.name || 'upload.pdf');
-      const r = await fetch(API_BASE + '/api/runs/ingest', { method: 'POST', body: fd });
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      const r = await fetch(API_BASE + '/api/runs/ingest', { method: 'POST', body: fd, headers });
       return await r.json();
     }
 
@@ -107,11 +116,23 @@
       for (const run of runs){
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-slate-50 cursor-pointer';
+        
+        // Determine status chip styling
+        let statusClass = 'bg-slate-100 text-slate-700 border border-slate-200'; // default
+        const statusLower = (run.status || '').toLowerCase();
+        if (statusLower === 'success') {
+          statusClass = 'bg-green-100 text-green-800 border border-green-200';
+        } else if (statusLower === 'warning') {
+          statusClass = 'bg-amber-100 text-amber-800 border border-amber-200';
+        } else if (statusLower === 'error') {
+          statusClass = 'bg-red-100 text-red-800 border border-red-200';
+        }
+        
         tr.innerHTML = `
           <td class="px-4 py-2 font-mono text-sm text-blue-700 underline">${run.id}</td>
           <td class="px-4 py-2">${run.invoiceNo || '—'}</td>
           <td class="px-4 py-2">${run.vendor || '—'}</td>
-          <td class="px-4 py-2">${run.status}</td>
+          <td class="px-4 py-2"><span class="${statusClass} rounded-full px-2 py-0.5 text-xs">${run.status}</span></td>
           <td class="px-4 py-2">${(run.items||[]).length}</td>
           <td class="px-4 py-2">${run.billLink ? '<a href="'+run.billLink+'" target="_blank">Open</a>' : '—'}</td>
           <td class="px-4 py-2">${ago(run.createdAt)}</td>

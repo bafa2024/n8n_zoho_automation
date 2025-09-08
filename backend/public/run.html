@@ -49,16 +49,112 @@
       w.document.write('<pre>'+JSON.stringify(obj,null,2)+'</pre>');
     }
 
-    async function apiGetRun(id){ return (await fetch(API_BASE+'/api/runs/'+id)).json().then(j=>j.run); }
-    async function apiCreateDraft(id){ return (await fetch(API_BASE+'/api/runs/'+id+'/zoho/draft',{method:'POST'})).json(); }
-    async function apiViewParsed(id){ return (await fetch(API_BASE+'/api/runs/'+id+'/parsed')).json(); }
-    async function apiViewZoho(id){ return (await fetch(API_BASE+'/api/runs/'+id+'/zoho')).json(); }
-    async function apiDeleteRun(id){ return (await fetch(API_BASE+'/api/runs/'+id,{method:'DELETE'})).json(); }
+    async function apiGetRun(id){ 
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      return (await fetch(API_BASE+'/api/runs/'+id, { headers })).json().then(j=>j.run); 
+    }
+    async function apiCreateDraft(id){ 
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      return (await fetch(API_BASE+'/api/runs/'+id+'/zoho/draft',{method:'POST', headers})).json(); 
+    }
+    async function apiViewParsed(id){ 
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      return (await fetch(API_BASE+'/api/runs/'+id+'/parsed', { headers })).json(); 
+    }
+    async function apiViewZoho(id){ 
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      return (await fetch(API_BASE+'/api/runs/'+id+'/zoho', { headers })).json(); 
+    }
+    async function apiDeleteRun(id){ 
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      return (await fetch(API_BASE+'/api/runs/'+id,{method:'DELETE', headers})).json(); 
+    }
 
     async function init(){
       const id = q('id');
       const run = await apiGetRun(id);
-      document.getElementById('runCard').textContent = 'Run '+run.id+' — Vendor: '+run.vendor;
+      
+      // Determine status chip styling
+      let statusClass = 'bg-slate-100 text-slate-700 border border-slate-200'; // default
+      const statusLower = (run.status || '').toLowerCase();
+      if (statusLower === 'success') {
+        statusClass = 'bg-green-100 text-green-800 border border-green-200';
+      } else if (statusLower === 'warning') {
+        statusClass = 'bg-amber-100 text-amber-800 border border-amber-200';
+      } else if (statusLower === 'error') {
+        statusClass = 'bg-red-100 text-red-800 border border-red-200';
+      }
+      
+      document.getElementById('runCard').innerHTML = `Run ${run.id} — Vendor: ${run.vendor} <span class="${statusClass} rounded-full px-2 py-0.5 text-xs ml-2">${run.status}</span>`;
+
+      // Render notes if they exist
+      if(run.notes && run.notes.length > 0){
+        let notesHTML = '';
+        run.notes.forEach(note => {
+          notesHTML += `<div class="bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2 mb-2 text-sm">${note}</div>`;
+        });
+        const notesContainer = document.createElement('div');
+        notesContainer.innerHTML = notesHTML;
+        document.getElementById('runCard').after(notesContainer);
+      }
+
+      // Render items table with totals
+      if(run.items && run.items.length > 0){
+        let tableHTML = '<table class="w-full"><thead class="bg-slate-50"><tr>';
+        tableHTML += '<th class="text-left p-2">Item</th>';
+        tableHTML += '<th class="text-right p-2">Qty</th>';
+        tableHTML += '<th class="text-right p-2">Rate</th>';
+        tableHTML += '<th class="text-right p-2">Amount</th>';
+        tableHTML += '</tr></thead><tbody>';
+        
+        run.items.forEach(item => {
+          tableHTML += '<tr class="border-t">';
+          tableHTML += `<td class="p-2">${item.name || ''}</td>`;
+          tableHTML += `<td class="text-right p-2">${item.quantity || ''}</td>`;
+          tableHTML += `<td class="text-right p-2">${item.rate || ''}</td>`;
+          tableHTML += `<td class="text-right p-2">${item.amount || ''}</td>`;
+          tableHTML += '</tr>';
+        });
+        
+        tableHTML += '</tbody>';
+        
+        // Add footer with totals
+        if(run.totals){
+          tableHTML += '<tfoot class="bg-slate-100">';
+          if(run.totals.subtotal !== undefined){
+            tableHTML += '<tr class="border-t">';
+            tableHTML += '<td colspan="3" class="text-right p-2 font-medium">Subtotal</td>';
+            tableHTML += `<td class="text-right p-2 font-medium">${run.totals.subtotal}</td>`;
+            tableHTML += '</tr>';
+          }
+          if(run.totals.tax !== undefined){
+            tableHTML += '<tr>';
+            tableHTML += '<td colspan="3" class="text-right p-2 font-medium">Tax</td>';
+            tableHTML += `<td class="text-right p-2 font-medium">${run.totals.tax}</td>`;
+            tableHTML += '</tr>';
+          }
+          if(run.totals.total !== undefined){
+            tableHTML += '<tr>';
+            tableHTML += '<td colspan="3" class="text-right p-2 font-semibold">Total</td>';
+            tableHTML += `<td class="text-right p-2 font-semibold">${run.totals.total}</td>`;
+            tableHTML += '</tr>';
+          }
+          tableHTML += '</tfoot>';
+        }
+        
+        tableHTML += '</table>';
+        document.getElementById('itemsCard').innerHTML = tableHTML;
+      }
 
       document.getElementById('btnCreateDraft').onclick=async()=>{
         await apiCreateDraft(id); alert('Draft created (mock)');

@@ -18,6 +18,18 @@ app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
 
+// Auth middleware for /api routes
+app.use('/api', (req, res, next) => {
+  const demoAuthToken = process.env.DEMO_AUTH_TOKEN;
+  if (demoAuthToken) {
+    const providedToken = req.headers['x-auth-token'];
+    if (providedToken !== demoAuthToken) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+  }
+  next();
+});
+
 // Info endpoint (ops snapshot)
 app.get('/api/info', (_req, res) => {
   res.json({
