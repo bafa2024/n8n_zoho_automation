@@ -37,7 +37,10 @@
 
     <!-- Runs table -->
     <div>
-      <div class="mb-2 text-slate-900 font-semibold">Recent runs</div>
+      <div class="mb-2 flex justify-between items-center">
+        <div class="text-slate-900 font-semibold">Recent runs</div>
+        <button id="exportCsv" class="rounded-xl border px-3 py-2 text-sm bg-white hover:bg-slate-50">Export CSV</button>
+      </div>
       <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <table class="min-w-full">
           <thead class="bg-slate-50 text-slate-600">
@@ -183,6 +186,9 @@
       document.getElementById('prevPage').addEventListener('click', ()=> {
         const prev = prevCursors.pop();
         loadPage(prev, true);
+      });
+      document.getElementById('exportCsv').addEventListener('click', ()=> {
+        window.open(API_BASE + '/api/runs/export', '_blank');
       });
     }
     init();

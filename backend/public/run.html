@@ -131,24 +131,18 @@
         // Add footer with totals
         if(run.totals){
           tableHTML += '<tfoot class="bg-slate-100">';
-          if(run.totals.subtotal !== undefined){
-            tableHTML += '<tr class="border-t">';
-            tableHTML += '<td colspan="3" class="text-right p-2 font-medium">Subtotal</td>';
-            tableHTML += `<td class="text-right p-2 font-medium">${run.totals.subtotal}</td>`;
-            tableHTML += '</tr>';
-          }
-          if(run.totals.tax !== undefined){
-            tableHTML += '<tr>';
-            tableHTML += '<td colspan="3" class="text-right p-2 font-medium">Tax</td>';
-            tableHTML += `<td class="text-right p-2 font-medium">${run.totals.tax}</td>`;
-            tableHTML += '</tr>';
-          }
-          if(run.totals.total !== undefined){
-            tableHTML += '<tr>';
-            tableHTML += '<td colspan="3" class="text-right p-2 font-semibold">Total</td>';
-            tableHTML += `<td class="text-right p-2 font-semibold">${run.totals.total}</td>`;
-            tableHTML += '</tr>';
-          }
+          tableHTML += '<tr class="border-t">';
+          tableHTML += '<td colspan="3" class="text-right p-2 font-semibold">Subtotal</td>';
+          tableHTML += `<td class="text-right p-2">${run.totals.subtotal || ''}</td>`;
+          tableHTML += '</tr>';
+          tableHTML += '<tr>';
+          tableHTML += '<td colspan="3" class="text-right p-2 font-semibold">Tax</td>';
+          tableHTML += `<td class="text-right p-2">${run.totals.tax || ''}</td>`;
+          tableHTML += '</tr>';
+          tableHTML += '<tr>';
+          tableHTML += '<td colspan="3" class="text-right p-2 font-semibold">Total</td>';
+          tableHTML += `<td class="text-right p-2">${run.totals.total || ''}</td>`;
+          tableHTML += '</tr>';
           tableHTML += '</tfoot>';
         }
         
