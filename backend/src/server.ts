@@ -7,6 +7,7 @@ import { config } from './config.js';
 import './db.js';
 import { runsRouter } from './routes/runs.js';
 import { zohoRouter } from './routes/zoho.js';
+import { oauthRouter } from './routes/oauth.js';
 import { env } from './lib/env.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -44,6 +45,9 @@ app.get('/api/info', (_req, res) => {
     now: Date.now(),
   });
 });
+
+// OAuth routes
+app.use('/oauth', oauthRouter);
 
 // API routes
 app.use('/api/runs', runsRouter);
