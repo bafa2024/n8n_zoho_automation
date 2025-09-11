@@ -108,4 +108,8 @@ export const RunsRepo = {
   setBillLink(id: string, billLink: string | null) {
     updateBillLinkStmt.run({ id, bill_link: billLink });
   },
+  getStoredPath(id: string): string | null {
+    const row = getStmt.get(id) as RunRow | undefined;
+    return row?.stored_path || null;
+  },
 };
