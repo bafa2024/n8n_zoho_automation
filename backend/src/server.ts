@@ -8,8 +8,7 @@ import './db.js';
 import { runsRouter } from './routes/runs.js';
 import { zohoRouter } from './routes/zoho.js';
 import { oauthRouter } from './routes/oauth.js';
-import { env } from './lib/env.js';
-import { TokensRepo } from './storage/tokensRepo.js';
+import { infoRouter } from './routes/info.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,26 +32,7 @@ app.use('/api', (req, res, next) => {
 });
 
 // Info endpoint (ops snapshot)
-app.get('/api/info', (_req, res) => {
-  // Get Zoho token status
-  const zohoToken = TokensRepo.get('zoho');
-  const now = Date.now();
-  
-  res.json({
-    parser: { configured: Boolean(config.parserUrl), url: config.parserUrl || null },
-    zoho: {
-      mode: env.ZOHO_MODE || (env.ZOHO_ACCESS_TOKEN && env.ZOHO_ORG_ID ? 'live' : 'mock'),
-      orgIdPresent: Boolean(env.ZOHO_ORG_ID),
-      tokenPresent: Boolean(env.ZOHO_ACCESS_TOKEN),
-      apiDomain: env.ZOHO_API_DOMAIN,
-      connected: Boolean(zohoToken),
-      expires_at: zohoToken?.expires_at || null,
-      valid: Boolean(zohoToken?.expires_at && zohoToken.expires_at > now),
-    },
-    storage: { dbPath: config.dbPath, uploadDir: config.uploadDir },
-    now: now,
-  });
-});
+app.use('/api/info', infoRouter);
 
 // OAuth routes
 app.use('/oauth', oauthRouter);
