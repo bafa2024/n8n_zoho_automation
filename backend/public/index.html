@@ -180,12 +180,25 @@
       const info = await apiInfo();
       const statusBanner = document.getElementById('statusBanner');
       
-      // Set banner content and styling based on Zoho mode
+      // Determine Zoho mode and connection status
+      let zohoModeHtml;
       if (info.zoho.mode === 'live') {
-        statusBanner.innerHTML = `<span class="text-green-600 font-medium">Zoho: live</span> | Parser: ${info.parser.configured?'on':'off'}`;
+        zohoModeHtml = `<span class="text-green-600 font-medium">Zoho: live</span>`;
       } else {
-        statusBanner.innerHTML = `<span class="text-gray-600">Zoho: mock</span> | Parser: ${info.parser.configured?'on':'off'}`;
+        zohoModeHtml = `<span class="text-gray-600">Zoho: mock</span>`;
       }
+      
+      // Add connection status
+      let connectionStatusHtml = '';
+      if (info.zoho.connected && info.zoho.valid) {
+        connectionStatusHtml = ` <span class="text-green-600">(connected)</span>`;
+      } else if (info.zoho.connected && !info.zoho.valid) {
+        connectionStatusHtml = ` <span class="text-red-600">(expired)</span>`;
+      } else {
+        connectionStatusHtml = ` <span class="text-gray-500">(not connected)</span>`;
+      }
+      
+      statusBanner.innerHTML = `${zohoModeHtml}${connectionStatusHtml} | Parser: ${info.parser.configured?'on':'off'}`;
       
       initUpload();
       await loadPage(null);
