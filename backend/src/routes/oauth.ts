@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { tokensRepo } from '../storage/tokensRepo.js';
+import { TokensRepo } from '../storage/tokensRepo.js';
 
 export const oauthRouter = Router();
 
@@ -53,7 +53,7 @@ oauthRouter.get('/zoho/callback', async (req, res) => {
   }
 
   const tokenData = (await resp.json()) as TokenResponse;
-  tokensRepo.save(
+  TokensRepo.save(
     'zoho',
     tokenData.access_token,
     tokenData.refresh_token,

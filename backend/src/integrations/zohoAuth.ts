@@ -1,4 +1,4 @@
-import { tokensRepo } from '../storage/tokensRepo.js';
+import { TokensRepo } from '../storage/tokensRepo.js';
 
 type RefreshResponse = {
   access_token: string;
@@ -6,7 +6,7 @@ type RefreshResponse = {
 };
 
 export async function getValidToken(): Promise<string> {
-  const token = tokensRepo.get('zoho');
+  const token = TokensRepo.get('zoho');
   if (!token) throw new Error('Zoho not connected');
 
   // still valid?
@@ -38,6 +38,6 @@ export async function getValidToken(): Promise<string> {
   const newToken = refreshData.access_token;
   const expiresIn = refreshData.expires_in;
 
-  tokensRepo.save('zoho', newToken, token.refresh_token, Date.now() + expiresIn * 1000);
+  TokensRepo.save('zoho', newToken, token.refresh_token, Date.now() + expiresIn * 1000);
   return newToken;
 }
