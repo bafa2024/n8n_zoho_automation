@@ -33,6 +33,41 @@ app.get('/api/version', (_req, res) => res.json({ version: packageJson.version }
 // Public time endpoint (before auth middleware)
 app.get('/api/time', (_req, res) => res.json({ time: new Date().toISOString() }));
 
+// Public env-check endpoint (before auth middleware)
+app.get('/api/env-check', (_req, res) => {
+  const maskSecret = (value: string | undefined) => {
+    if (!value) return "missing";
+    if (value.length <= 4) return value + "***";
+    return value.substring(0, 4) + "***";
+  };
+
+  const checkEnv = (key: string) => {
+    const value = process.env[key];
+    return value ? "set" : "missing";
+  };
+
+  const checkSecretEnv = (key: string) => {
+    const value = process.env[key];
+    return value ? maskSecret(value) : "missing";
+  };
+
+  res.json({
+    ZOHO_CLIENT_ID: checkEnv('ZOHO_CLIENT_ID'),
+    ZOHO_CLIENT_SECRET: checkSecretEnv('ZOHO_CLIENT_SECRET'),
+    ZOHO_REDIRECT_URI: checkEnv('ZOHO_REDIRECT_URI')
+  });
+});
+
+// Public mock Zoho user endpoint (before auth middleware)
+app.get('/api/zoho/mock-user', (_req, res) => {
+  res.json({
+    id: "1234567890",
+    email: "mock.user@zoho.com",
+    name: "Mock User",
+    role: "admin"
+  });
+});
+
 // Auth middleware for /api routes
 app.use('/api', (req, res, next) => {
   const demoAuthToken = process.env.DEMO_AUTH_TOKEN;
