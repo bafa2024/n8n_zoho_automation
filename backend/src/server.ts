@@ -30,6 +30,9 @@ app.get('/api/health', (_req, res) => res.json({ status: "healthy" }));
 // Public version endpoint (before auth middleware)
 app.get('/api/version', (_req, res) => res.json({ version: packageJson.version }));
 
+// Public time endpoint (before auth middleware)
+app.get('/api/time', (_req, res) => res.json({ time: new Date().toISOString() }));
+
 // Auth middleware for /api routes
 app.use('/api', (req, res, next) => {
   const demoAuthToken = process.env.DEMO_AUTH_TOKEN;
