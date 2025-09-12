@@ -19,6 +19,9 @@ app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
 
+// Public health endpoint (before auth middleware)
+app.get('/api/health', (_req, res) => res.json({ status: "healthy" }));
+
 // Auth middleware for /api routes
 app.use('/api', (req, res, next) => {
   const demoAuthToken = process.env.DEMO_AUTH_TOKEN;
@@ -40,9 +43,6 @@ app.use('/oauth', oauthRouter);
 // API routes
 app.use('/api/runs', runsRouter);
 app.use('/api', zohoRouter);
-
-// health
-app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
 // Static frontend
 const staticDir = path.join(__dirname, '..', 'public');
