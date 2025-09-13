@@ -68,6 +68,36 @@ app.get('/api/zoho/mock-user', (_req, res) => {
   });
 });
 
+// Public mock Zoho contacts endpoint (before auth middleware)
+app.get('/api/zoho/mock-contacts', (_req, res) => {
+  res.json([
+    { id: "c1", name: "Alice Example", email: "alice@example.com" },
+    { id: "c2", name: "Bob Example", email: "bob@example.com" }
+  ]);
+});
+
+// Public OAuth Zoho authorize endpoint (before auth middleware)
+app.get('/oauth/zoho/authorize', (_req, res) => {
+  res.json({
+    redirect_url: "https://accounts.zoho.com/oauth/v2/auth?response_type=code&client_id=mock-client-id&scope=ZohoBooks.fullaccess.all&redirect_uri=http://localhost:10000/oauth/callback&access_type=offline&state=mock-state-123"
+  });
+});
+
+// Public OAuth Zoho callback endpoint (before auth middleware)
+app.get('/oauth/zoho/callback', (req, res) => {
+  const { code } = req.query;
+  
+  if (!code) {
+    return res.status(400).json({ error: "missing_code" });
+  }
+  
+  res.json({
+    access_token: `mock_access_token_${code}`,
+    refresh_token: "mock_refresh_token_xyz789",
+    expires_in: 3600
+  });
+});
+
 // Auth middleware for /api routes
 app.use('/api', (req, res, next) => {
   const demoAuthToken = process.env.DEMO_AUTH_TOKEN;
