@@ -98,6 +98,36 @@ app.get('/oauth/zoho/callback', (req, res) => {
   });
 });
 
+// Public Zoho user endpoint with token validation (before auth middleware)
+app.get('/api/zoho/user', (req, res) => {
+  const { access_token } = req.query;
+  
+  if (!access_token) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  
+  res.json({
+    id: "u1",
+    email: "mock.user@zoho.com",
+    name: "Mock User",
+    role: "admin"
+  });
+});
+
+// Public Zoho contacts endpoint with token validation (before auth middleware)
+app.get('/api/zoho/contacts', (req, res) => {
+  const { access_token } = req.query;
+  
+  if (!access_token) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  
+  res.json([
+    { id: "c1", name: "Alice Example", email: "alice@example.com" },
+    { id: "c2", name: "Bob Example", email: "bob@example.com" }
+  ]);
+});
+
 // Auth middleware for /api routes
 app.use('/api', (req, res, next) => {
   const demoAuthToken = process.env.DEMO_AUTH_TOKEN;
