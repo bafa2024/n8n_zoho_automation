@@ -128,6 +128,20 @@ app.get('/api/zoho/contacts', (req, res) => {
   ]);
 });
 
+// Public Zoho refresh token endpoint (before auth middleware)
+app.get('/api/zoho/refresh', (req, res) => {
+  const { refresh_token } = req.query;
+  
+  if (!refresh_token) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  
+  res.json({
+    access_token: "mock_new_access_token_123",
+    expires_in: 3600
+  });
+});
+
 // Auth middleware for /api routes
 app.use('/api', (req, res, next) => {
   const demoAuthToken = process.env.DEMO_AUTH_TOKEN;
