@@ -4,7 +4,9 @@ import morgan from 'morgan';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync } from 'fs';
+import multer from 'multer';
 import { config } from './config.js';
+import { ensureDir } from './lib/fsutil.js';
 import './db.js';
 import { runsRouter } from './routes/runs.js';
 import { zohoRouter } from './routes/zoho.js';
@@ -19,6 +21,23 @@ const packageJsonPath = path.join(__dirname, '..', 'package.json');
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 
 const app = express();
+
+// Ensure upload directory exists
+ensureDir(config.uploadDir);
+
+// Multer configuration for file uploads
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, config.uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
+  }),
+  limits: { fileSize: 30 * 1024 * 1024 }, // 30MB limit
+});
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
@@ -78,9 +97,19 @@ app.get('/api/zoho/mock-contacts', (_req, res) => {
 
 // Public OAuth Zoho authorize endpoint (before auth middleware)
 app.get('/oauth/zoho/authorize', (_req, res) => {
-  res.json({
-    redirect_url: "https://accounts.zoho.com/oauth/v2/auth?response_type=code&client_id=mock-client-id&scope=ZohoBooks.fullaccess.all&redirect_uri=http://localhost:10000/oauth/callback&access_type=offline&state=mock-state-123"
-  });
+  const clientId = process.env.ZOHO_CLIENT_ID;
+  const redirectUri = process.env.ZOHO_REDIRECT_URI;
+  
+  if (!clientId || !redirectUri) {
+    return res.status(500).json({ error: "OAuth configuration missing" });
+  }
+  
+  // Generate random state for security
+  const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  
+  const authUrl = `https://accounts.zoho.com/oauth/v2/auth?response_type=code&client_id=${clientId}&scope=ZohoBooks.fullaccess.all&redirect_uri=${encodeURIComponent(redirectUri)}&access_type=offline&state=${state}`;
+  
+  res.redirect(302, authUrl);
 });
 
 // Public OAuth Zoho callback endpoint (before auth middleware)
@@ -153,6 +182,21 @@ app.get('/api/zoho/token-status', (req, res) => {
   res.json({
     status: "valid",
     access_token: access_token
+  });
+});
+
+// Public upload endpoint (before auth middleware)
+app.post('/upload', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'file_required' });
+  }
+  
+  res.json({
+    success: true,
+    filename: req.file.filename,
+    originalname: req.file.originalname,
+    size: req.file.size,
+    path: req.file.path
   });
 });
 
