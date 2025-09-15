@@ -113,34 +113,89 @@ app.get('/oauth/zoho/authorize', (_req, res) => {
 });
 
 // Public OAuth Zoho callback endpoint (before auth middleware)
-app.get('/oauth/zoho/callback', (req, res) => {
+app.get('/oauth/zoho/callback', async (req, res) => {
   const { code } = req.query;
   
   if (!code) {
-    return res.status(400).json({ error: "missing_code" });
+    return res.status(400).json({ 
+      error: "missing_code",
+      message: "Authorization code not found. Make sure you start the flow from /oauth/zoho/authorize and confirm that your Redirect URI matches the one set in Zoho API Console."
+    });
   }
   
-  res.json({
-    access_token: `mock_access_token_${code}`,
-    refresh_token: "mock_refresh_token_xyz789",
-    expires_in: 3600
-  });
+  const clientId = process.env.ZOHO_CLIENT_ID;
+  const clientSecret = process.env.ZOHO_CLIENT_SECRET;
+  const redirectUri = process.env.ZOHO_REDIRECT_URI;
+  
+  if (!clientId || !clientSecret || !redirectUri) {
+    return res.status(500).json({ error: "OAuth configuration missing" });
+  }
+  
+  try {
+    const tokenResponse = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        code: code as string
+      })
+    });
+    
+    const tokenData = await tokenResponse.json() as any;
+    
+    if (!tokenResponse.ok) {
+      return res.status(400).json({ 
+        error: "token_exchange_failed", 
+        details: tokenData 
+      });
+    }
+    
+    res.json({
+      access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token,
+      expires_in: tokenData.expires_in
+    });
+    
+  } catch (error) {
+    console.error('Token exchange error:', error);
+    res.status(500).json({ error: "internal_error" });
+  }
 });
 
 // Public Zoho user endpoint with token validation (before auth middleware)
-app.get('/api/zoho/user', (req, res) => {
+app.get('/api/zoho/user', async (req, res) => {
   const { access_token } = req.query;
   
   if (!access_token) {
     return res.status(401).json({ error: "unauthorized" });
   }
   
-  res.json({
-    id: "u1",
-    email: "mock.user@zoho.com",
-    name: "Mock User",
-    role: "admin"
-  });
+  try {
+    const userResponse = await fetch('https://accounts.zoho.com/oauth/user/info', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const userData = await userResponse.json() as any;
+    
+    if (!userResponse.ok) {
+      return res.status(userResponse.status).json(userData);
+    }
+    
+    res.json(userData);
+    
+  } catch (error) {
+    console.error('Zoho user API error:', error);
+    res.status(500).json({ error: "internal_error" });
+  }
 });
 
 // Public Zoho contacts endpoint with token validation (before auth middleware)
