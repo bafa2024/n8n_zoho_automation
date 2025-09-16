@@ -176,9 +176,9 @@ app.get('/api/zoho/user', async (req, res) => {
   }
   
   try {
-    // Safely build the API URL
-    const baseApi = (typeof api_domain === 'string' && api_domain) ? api_domain : 'https://www.zohoapis.com';
-    const cleanBase = baseApi.replace(/\/+$/, ''); // Remove trailing slashes
+    // Safely build the API URL with sanitization
+    const baseApi = (typeof api_domain === 'string' && api_domain) ? api_domain.trim() : 'https://www.zohoapis.com';
+    const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, ''); // Remove trailing slashes and newlines
     const url = `${cleanBase}/oauth/user/info`;
     
     const userResponse = await fetch(url, {
