@@ -114,7 +114,7 @@ app.get('/oauth/zoho/authorize', (_req, res) => {
 
 // Public OAuth Zoho callback endpoint (before auth middleware)
 app.get('/oauth/zoho/callback', async (req, res) => {
-  const { code } = req.query;
+  const { code, 'accounts-server': accountsServer } = req.query;
   
   if (!code) {
     return res.status(400).json({ 
@@ -131,8 +131,12 @@ app.get('/oauth/zoho/callback', async (req, res) => {
     return res.status(500).json({ error: "OAuth configuration missing" });
   }
   
+  // Determine the correct Zoho accounts domain
+  const accountsDomain = accountsServer ? accountsServer as string : 'https://accounts.zoho.com';
+  const tokenUrl = `${accountsDomain}/oauth/v2/token`;
+  
   try {
-    const tokenResponse = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+    const tokenResponse = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
