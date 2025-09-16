@@ -169,14 +169,17 @@ app.get('/oauth/zoho/callback', async (req, res) => {
 
 // Public Zoho user endpoint with token validation (before auth middleware)
 app.get('/api/zoho/user', async (req, res) => {
-  const { access_token } = req.query;
+  const { access_token, api_domain } = req.query;
   
   if (!access_token) {
     return res.status(401).json({ error: "unauthorized" });
   }
   
+  const baseApi = (typeof api_domain === 'string' && api_domain) ? api_domain : 'https://www.zohoapis.com';
+  const url = `${baseApi.replace(/\/$/, '')}/oauth/user/info`;
+  
   try {
-    const userResponse = await fetch('https://accounts.zoho.com/oauth/user/info', {
+    const userResponse = await fetch(url, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${access_token}`,
