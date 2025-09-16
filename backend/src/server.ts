@@ -253,6 +253,53 @@ app.get('/oauth/zoho/refresh', (req, res) => {
   });
 });
 
+// Public Zoho refresh token endpoint (POST) - before auth middleware
+app.post('/api/zoho/refresh', async (req, res) => {
+  const { refresh_token, accounts_server } = req.body;
+  
+  if (!refresh_token) {
+    return res.status(400).json({ error: "missing_refresh_token" });
+  }
+  
+  const clientId = process.env.ZOHO_CLIENT_ID;
+  const clientSecret = process.env.ZOHO_CLIENT_SECRET;
+  
+  if (!clientId || !clientSecret) {
+    return res.status(500).json({ error: "OAuth configuration missing" });
+  }
+  
+  // Determine the correct Zoho accounts domain
+  const accountsDomain = accounts_server || 'https://accounts.zoho.com';
+  const tokenUrl = `${accountsDomain}/oauth/v2/token`;
+  
+  try {
+    const tokenResponse = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refresh_token
+      })
+    });
+    
+    const tokenData = await tokenResponse.json() as any;
+    
+    if (!tokenResponse.ok) {
+      return res.status(tokenResponse.status).json(tokenData);
+    }
+    
+    res.json(tokenData);
+    
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
 // Public Zoho token status endpoint (before auth middleware)
 app.get('/api/zoho/token-status', (req, res) => {
   const { access_token } = req.query;
