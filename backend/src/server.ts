@@ -155,11 +155,7 @@ app.get('/oauth/zoho/callback', async (req, res) => {
       });
     }
     
-    res.json({
-      access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token,
-      expires_in: tokenData.expires_in
-    });
+    res.json(tokenData);
     
   } catch (error) {
     console.error('Token exchange error:', error);
@@ -237,6 +233,15 @@ app.get('/api/zoho/token-status', (req, res) => {
   res.json({
     status: "valid",
     access_token: access_token
+  });
+});
+
+// Public OAuth debug endpoint (before auth middleware)
+app.get('/api/debug-oauth', (_req, res) => {
+  res.json({
+    ZOHO_CLIENT_ID: process.env.ZOHO_CLIENT_ID ? "set" : "missing",
+    ZOHO_CLIENT_SECRET: process.env.ZOHO_CLIENT_SECRET ? "set" : "missing",
+    ZOHO_REDIRECT_URI: process.env.ZOHO_REDIRECT_URI ? "set" : "missing"
   });
 });
 
