@@ -204,17 +204,39 @@ app.get('/api/zoho/user', async (req, res) => {
 });
 
 // Public Zoho contacts endpoint with token validation (before auth middleware)
-app.get('/api/zoho/contacts', (req, res) => {
-  const { access_token } = req.query;
+app.get('/api/zoho/contacts', async (req, res) => {
+  const { access_token, api_domain } = req.query;
   
   if (!access_token) {
     return res.status(401).json({ error: "unauthorized" });
   }
   
-  res.json([
-    { id: "c1", name: "Alice Example", email: "alice@example.com" },
-    { id: "c2", name: "Bob Example", email: "bob@example.com" }
-  ]);
+  try {
+    // Safely build the API URL with sanitization
+    const baseApi = (typeof api_domain === 'string' && api_domain) ? api_domain.trim() : 'https://www.zohoapis.com';
+    const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, ''); // Remove trailing slashes and newlines
+    const url = `${cleanBase}/crm/v2/Contacts`;
+    
+    const contactsResponse = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const contactsData = await contactsResponse.json() as any;
+    
+    if (!contactsResponse.ok) {
+      return res.status(contactsResponse.status).json(contactsData);
+    }
+    
+    res.json(contactsData);
+    
+  } catch (error) {
+    console.error('Zoho contacts API error:', error);
+    res.status(500).json({ error: "internal_error" });
+  }
 });
 
 // Public Zoho refresh token endpoint (before auth middleware)
