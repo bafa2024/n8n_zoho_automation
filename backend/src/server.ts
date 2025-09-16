@@ -175,10 +175,12 @@ app.get('/api/zoho/user', async (req, res) => {
     return res.status(401).json({ error: "unauthorized" });
   }
   
-  const baseApi = (typeof api_domain === 'string' && api_domain) ? api_domain : 'https://www.zohoapis.com';
-  const url = `${baseApi.replace(/\/$/, '')}/oauth/user/info`;
-  
   try {
+    // Safely build the API URL
+    const baseApi = (typeof api_domain === 'string' && api_domain) ? api_domain : 'https://www.zohoapis.com';
+    const cleanBase = baseApi.replace(/\/+$/, ''); // Remove trailing slashes
+    const url = `${cleanBase}/oauth/user/info`;
+    
     const userResponse = await fetch(url, {
       method: 'GET',
       headers: {
