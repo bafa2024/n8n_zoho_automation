@@ -344,6 +344,42 @@ app.get('/api/zoho/token-status', async (req, res) => {
   }
 });
 
+// Public Zoho Books contacts endpoint (before auth middleware)
+app.get('/api/zoho/books/contacts', async (req, res) => {
+  const { access_token, organization_id, api_domain } = req.query;
+  
+  if (!access_token || !organization_id) {
+    return res.status(400).json({ error: "missing_parameters" });
+  }
+  
+  try {
+    // Safely build the API URL with sanitization
+    const baseApi = (typeof api_domain === 'string' && api_domain) ? api_domain.trim() : 'https://www.zohoapis.com';
+    const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, ''); // Remove trailing slashes and newlines
+    const url = `${cleanBase}/books/v3/contacts?organization_id=${organization_id}`;
+    
+    const contactsResponse = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const contactsData = await contactsResponse.json() as any;
+    
+    if (!contactsResponse.ok) {
+      return res.status(contactsResponse.status).json(contactsData);
+    }
+    
+    res.json(contactsData);
+    
+  } catch (error) {
+    console.error('Zoho Books contacts API error:', error);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
 // Public OAuth debug endpoint (before auth middleware)
 app.get('/api/debug-oauth', (_req, res) => {
   res.json({
