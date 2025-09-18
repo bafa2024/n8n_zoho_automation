@@ -301,17 +301,47 @@ app.post('/api/zoho/refresh', async (req, res) => {
 });
 
 // Public Zoho token status endpoint (before auth middleware)
-app.get('/api/zoho/token-status', (req, res) => {
-  const { access_token } = req.query;
+app.get('/api/zoho/token-status', async (req, res) => {
+  const { access_token, accounts_server } = req.query;
   
   if (!access_token) {
-    return res.status(401).json({ error: "unauthorized" });
+    return res.status(400).json({ error: "missing_access_token" });
   }
   
-  res.json({
-    status: "valid",
-    access_token: access_token
-  });
+  try {
+    // Determine the correct Zoho accounts domain
+    const accountsDomain = accounts_server ? accounts_server as string : 'https://accounts.zoho.com';
+    const tokenInfoUrl = `${accountsDomain}/oauth/v2/tokeninfo?access_token=${access_token}`;
+    
+    const tokenResponse = await fetch(tokenInfoUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const tokenData = await tokenResponse.json() as any;
+    
+    if (!tokenResponse.ok) {
+      return res.status(200).json({ 
+        status: "invalid", 
+        error: tokenData.error || "Token validation failed" 
+      });
+    }
+    
+    // Token is valid, return success with expiration info
+    res.status(200).json({
+      status: "valid",
+      expires_in: tokenData.expires_in || 3600
+    });
+    
+  } catch (error) {
+    console.error('Token validation error:', error);
+    res.status(200).json({ 
+      status: "invalid", 
+      error: "Token validation request failed" 
+    });
+  }
 });
 
 // Public OAuth debug endpoint (before auth middleware)
