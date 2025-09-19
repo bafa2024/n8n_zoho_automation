@@ -394,11 +394,15 @@ app.post('/api/zoho/books/contacts', async (req, res) => {
     const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, ''); // Remove trailing slashes and newlines
     const url = `${cleanBase}/books/v3/contacts?organization_id=${organization_id}`;
     
-    // Build Zoho Books contact payload
+    // Build Zoho Books contact payload with contact_persons array
     const contactPayload = {
       contact_name: contact_name,
-      ...(email && { email }),
-      ...(phone && { phone })
+      contact_persons: [
+        {
+          ...(email && { email }),
+          ...(phone && { phone })
+        }
+      ]
     };
     
     const contactsResponse = await fetch(url, {
