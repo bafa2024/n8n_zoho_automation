@@ -502,6 +502,91 @@ app.get('/debug/routes', (_req, res) => {
   });
 });
 
+// Public n8n sync contacts endpoint (before auth middleware)
+app.get('/api/n8n/sync-contacts', async (req, res) => {
+  const { access_token, organization_id, api_domain, webhook_url } = req.query;
+  
+  // Debug logging
+  console.log('=== N8N SYNC CONTACTS DEBUG ===');
+  console.log('Query parameters:', {
+    access_token: access_token ? `${String(access_token).substring(0, 10)}...` : 'missing',
+    organization_id: organization_id || 'missing',
+    api_domain: api_domain || 'missing',
+    webhook_url: webhook_url || 'missing'
+  });
+  
+  if (!access_token || !organization_id || !api_domain || !webhook_url) {
+    console.log('Missing required parameters - returning 400');
+    return res.status(400).json({ error: "missing_parameters" });
+  }
+  
+  try {
+    // Safely build the Zoho API URL with sanitization
+    const baseApi = (typeof api_domain === 'string' && api_domain) ? String(api_domain).trim() : 'https://www.zohoapis.com';
+    const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, ''); // Remove trailing slashes and newlines
+    const zohoUrl = `${cleanBase}/books/v3/contacts?organization_id=${organization_id}`;
+    
+    console.log('Fetching contacts from Zoho URL:', zohoUrl);
+    
+    // Fetch contacts from Zoho Books
+    const zohoResponse = await fetch(zohoUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('Zoho API response status:', zohoResponse.status, zohoResponse.statusText);
+    
+    const contactsData = await zohoResponse.json() as any;
+    
+    if (!zohoResponse.ok) {
+      console.log('Zoho API error - forwarding to client');
+      return res.status(zohoResponse.status).json(contactsData);
+    }
+    
+    console.log('Successfully fetched contacts from Zoho, count:', contactsData.contacts?.length || 0);
+    
+    // Forward contacts to n8n webhook
+    console.log('Forwarding to n8n webhook:', webhook_url);
+    
+    const webhookResponse = await fetch(String(webhook_url), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(contactsData)
+    });
+    
+    console.log('n8n webhook response status:', webhookResponse.status, webhookResponse.statusText);
+    
+    if (!webhookResponse.ok) {
+      const webhookError = await webhookResponse.text();
+      console.log('n8n webhook error:', webhookError);
+      return res.status(webhookResponse.status).json({ 
+        error: "webhook_failed", 
+        webhook_status: webhookResponse.status,
+        webhook_error: webhookError
+      });
+    }
+    
+    const contactCount = contactsData.contacts?.length || 0;
+    console.log('Successfully synced', contactCount, 'contacts to n8n');
+    console.log('=== END N8N SYNC DEBUG ===');
+    
+    res.json({ 
+      status: "synced", 
+      count: contactCount 
+    });
+    
+  } catch (error) {
+    console.error('n8n sync contacts error:', error);
+    console.log('=== END N8N SYNC DEBUG (ERROR) ===');
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
 // Public upload endpoint (before auth middleware)
 app.post('/upload', upload.single('file'), (req, res) => {
   if (!req.file) {
