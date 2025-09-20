@@ -437,6 +437,41 @@ app.get('/api/debug-oauth', (_req, res) => {
   });
 });
 
+// Temporary debug route to list all registered routes
+app.get('/debug/routes', (_req, res) => {
+  const routes: string[] = [];
+  
+  // Extract routes from Express app
+  app._router.stack.forEach((middleware: any) => {
+    if (middleware.route) {
+      // Direct route
+      const path = middleware.route.path;
+      const methods = Object.keys(middleware.route.methods);
+      methods.forEach(method => {
+        routes.push(`${method.toUpperCase()} ${path}`);
+      });
+    } else if (middleware.name === 'router') {
+      // Router middleware
+      if (middleware.regexp) {
+        const path = middleware.regexp.source
+          .replace(/\\\//g, '/')
+          .replace(/\^/g, '')
+          .replace(/\$/g, '')
+          .replace(/\\/g, '');
+        if (path && path !== '.*') {
+          routes.push(`ROUTER ${path}`);
+        }
+      }
+    }
+  });
+  
+  res.json({
+    routes: routes.sort(),
+    total: routes.length,
+    note: "Temporary debug endpoint - remove in production"
+  });
+});
+
 // Public upload endpoint (before auth middleware)
 app.post('/upload', upload.single('file'), (req, res) => {
   if (!req.file) {
