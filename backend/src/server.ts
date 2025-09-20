@@ -384,7 +384,19 @@ app.get('/api/zoho/books/contacts', async (req, res) => {
 app.post('/api/zoho/books/contacts', async (req, res) => {
   const { access_token, organization_id, api_domain, contact_name, email, phone } = req.body;
   
+  // Debug logging - incoming request body
+  console.log('=== ZOHO BOOKS CREATE CONTACT DEBUG ===');
+  console.log('Incoming request body:', {
+    access_token: access_token ? `${access_token.substring(0, 10)}...` : 'missing',
+    organization_id: organization_id || 'missing',
+    api_domain: api_domain || 'missing',
+    contact_name: contact_name || 'missing',
+    email: email || 'not provided',
+    phone: phone || 'not provided'
+  });
+  
   if (!access_token || !organization_id || !contact_name) {
+    console.log('Missing required parameters - returning 400');
     return res.status(400).json({ error: "missing_parameters" });
   }
   
@@ -393,6 +405,9 @@ app.post('/api/zoho/books/contacts', async (req, res) => {
     const baseApi = (typeof api_domain === 'string' && api_domain) ? api_domain.trim() : 'https://www.zohoapis.com';
     const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, ''); // Remove trailing slashes and newlines
     const url = `${cleanBase}/books/v3/contacts?organization_id=${organization_id}`;
+    
+    // Debug logging - constructed URL
+    console.log('Constructed Zoho API URL:', url);
     
     // Build Zoho Books contact payload with contact_persons array
     const contactPayload = {
@@ -405,6 +420,13 @@ app.post('/api/zoho/books/contacts', async (req, res) => {
       ]
     };
     
+    // Debug logging - request payload
+    console.log('Request payload to Zoho:', JSON.stringify(contactPayload, null, 2));
+    console.log('Request headers:', {
+      'Authorization': `Zoho-oauthtoken ${access_token.substring(0, 10)}...`,
+      'Content-Type': 'application/json'
+    });
+    
     const contactsResponse = await fetch(url, {
       method: 'POST',
       headers: {
@@ -414,7 +436,14 @@ app.post('/api/zoho/books/contacts', async (req, res) => {
       body: JSON.stringify(contactPayload)
     });
     
+    // Debug logging - response status
+    console.log('Zoho API response status:', contactsResponse.status, contactsResponse.statusText);
+    
     const contactsData = await contactsResponse.json() as any;
+    
+    // Debug logging - raw Zoho response
+    console.log('Raw Zoho API response:', JSON.stringify(contactsData, null, 2));
+    console.log('=== END DEBUG ===');
     
     if (!contactsResponse.ok) {
       return res.status(contactsResponse.status).json(contactsData);
@@ -424,6 +453,7 @@ app.post('/api/zoho/books/contacts', async (req, res) => {
     
   } catch (error) {
     console.error('Zoho Books create contact API error:', error);
+    console.log('=== END DEBUG (ERROR) ===');
     res.status(500).json({ error: "internal_error" });
   }
 });
