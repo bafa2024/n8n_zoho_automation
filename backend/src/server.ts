@@ -458,6 +458,94 @@ app.post('/api/zoho/books/contacts', async (req, res) => {
   }
 });
 
+// Public Zoho Books invoices endpoint (before auth middleware)
+app.get('/api/zoho/books/invoices', async (req, res) => {
+  const { access_token, organization_id, api_domain } = req.query;
+  
+  if (!access_token || !organization_id) {
+    return res.status(400).json({ error: "missing_parameters" });
+  }
+  
+  try {
+    // Safely build the API URL with sanitization
+    const baseApi = (typeof api_domain === 'string' && api_domain) ? String(api_domain).trim() : 'https://www.zohoapis.com';
+    const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, '');
+    const url = `${cleanBase}/books/v3/invoices?organization_id=${organization_id}`;
+    
+    const invoicesResponse = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const invoicesData = await invoicesResponse.json() as any;
+    
+    if (!invoicesResponse.ok) {
+      return res.status(invoicesResponse.status).json(invoicesData);
+    }
+    
+    res.json(invoicesData);
+  } catch (error) {
+    console.error('Zoho Books invoices API error:', error);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// Public n8n sync invoices endpoint (before auth middleware)
+app.get('/api/n8n/sync-invoices', async (req, res) => {
+  const { access_token, organization_id, api_domain, webhook_url } = req.query;
+  
+  // Basic validation
+  if (!access_token || !organization_id || !api_domain || !webhook_url) {
+    return res.status(400).json({ error: "missing_parameters" });
+  }
+  
+  try {
+    // Build Zoho Books invoices URL
+    const baseApi = (typeof api_domain === 'string' && api_domain) ? String(api_domain).trim() : 'https://www.zohoapis.com';
+    const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, '');
+    const zohoUrl = `${cleanBase}/books/v3/invoices?organization_id=${organization_id}`;
+    
+    // Fetch invoices from Zoho Books
+    const zohoResponse = await fetch(zohoUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const invoicesData = await zohoResponse.json() as any;
+    if (!zohoResponse.ok) {
+      return res.status(zohoResponse.status).json(invoicesData);
+    }
+    
+    // Forward to webhook
+    const webhookResponse = await fetch(String(webhook_url), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(invoicesData)
+    });
+    if (!webhookResponse.ok) {
+      const webhookError = await webhookResponse.text();
+      return res.status(webhookResponse.status).json({ 
+        error: 'webhook_failed', 
+        webhook_status: webhookResponse.status,
+        webhook_error: webhookError 
+      });
+    }
+    
+    const invoiceCount = invoicesData.invoices?.length || 0;
+    res.json({ status: 'synced', count: invoiceCount });
+  } catch (error) {
+    console.error('n8n sync invoices error:', error);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 // Public OAuth debug endpoint (before auth middleware)
 app.get('/api/debug-oauth', (_req, res) => {
   res.json({
@@ -521,8 +609,8 @@ app.get('/api/docs', (_req, res) => {
 
       { method: 'GET',  path: '/api/zoho/books/contacts', description: 'Fetch Zoho Books contacts (requires access_token, organization_id, optional api_domain)' },
       { method: 'POST', path: '/api/zoho/books/contacts', description: 'Create Zoho Books contact (JSON body: access_token, organization_id, api_domain, contact_name, email, phone)' },
-
-      { method: 'GET',  path: '/api/n8n/sync-contacts', description: 'Fetch Zoho Books contacts and POST to webhook_url (requires access_token, organization_id, api_domain, webhook_url)' },
+      { method: 'GET',  path: '/api/zoho/books/invoices', description: 'Fetch Zoho Books invoices (requires access_token, organization_id, optional api_domain)' },
+      { method: 'GET',  path: '/api/n8n/sync-invoices', description: 'Fetch Zoho Books invoices and POST to webhook_url (requires access_token, organization_id, api_domain, webhook_url)' },
 
       { method: 'GET',  path: '/debug/routes', description: 'Temporary: list raw registered routes (dev only)' }
     ]
