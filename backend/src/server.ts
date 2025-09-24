@@ -107,7 +107,7 @@ app.get('/oauth/zoho/authorize', (_req, res) => {
   // Generate random state for security
   const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
   
-  const authUrl = `https://accounts.zoho.com/oauth/v2/auth?response_type=code&client_id=${clientId}&scope=ZohoBooks.fullaccess.all&redirect_uri=${encodeURIComponent(redirectUri)}&access_type=offline&state=${state}`;
+  const authUrl = `https://accounts.zoho.com/oauth/v2/auth?response_type=code&client_id=${clientId}&scope=ZohoBooks.fullaccess.all,ZohoBooks.invoices.READ,ZohoBooks.invoices.CREATE&redirect_uri=${encodeURIComponent(redirectUri)}&access_type=offline&state=${state}`;
   
   res.redirect(302, authUrl);
 });
