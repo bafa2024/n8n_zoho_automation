@@ -594,26 +594,31 @@ app.get('/debug/routes', (_req, res) => {
 app.get('/api/docs', (_req, res) => {
   res.json({
     endpoints: [
-      { method: 'GET',  path: '/api/health', description: 'Check backend health status' },
-      { method: 'GET',  path: '/api/version', description: 'Return backend version' },
-      { method: 'GET',  path: '/api/time', description: 'Return current server time (ISO)' },
-      { method: 'GET',  path: '/api/env-check', description: 'Show OAuth-related environment variable status' },
+      { method: 'GET',  path: '/api/health', description: 'Check backend health status', example: 'GET https://<base_url>/api/health' },
+      { method: 'GET',  path: '/api/version', description: 'Return backend version', example: 'GET https://<base_url>/api/version' },
+      { method: 'GET',  path: '/api/time', description: 'Return current server time (ISO)', example: 'GET https://<base_url>/api/time' },
+      { method: 'GET',  path: '/api/env-check', description: 'Show OAuth-related environment variable status', example: 'GET https://<base_url>/api/env-check' },
 
-      { method: 'GET',  path: '/oauth/zoho/authorize', description: 'Redirect to Zoho OAuth with ZohoBooks.fullaccess.all scope' },
-      { method: 'GET',  path: '/oauth/zoho/callback', description: 'Handle Zoho OAuth callback and exchange code for tokens' },
+      { method: 'GET',  path: '/oauth/zoho/authorize', description: 'Redirect to Zoho OAuth with ZohoBooks scopes', example: 'GET https://<base_url>/oauth/zoho/authorize' },
+      { method: 'GET',  path: '/oauth/zoho/callback', description: 'Handle Zoho OAuth callback and exchange code for tokens', example: 'GET https://<base_url>/oauth/zoho/callback?code=<auth_code>&accounts-server=https://accounts.zoho.com' },
 
-      { method: 'GET',  path: '/api/zoho/user', description: 'Fetch Zoho user info (requires access_token, optional api_domain)' },
-      { method: 'GET',  path: '/api/zoho/contacts', description: 'Fetch Zoho CRM contacts (requires access_token, optional api_domain)' },
-      { method: 'GET',  path: '/api/zoho/token-status', description: 'Validate an access token against Zoho accounts (requires access_token, optional accounts_server)' },
-      { method: 'POST', path: '/api/zoho/refresh', description: 'Exchange refresh_token for new access_token (JSON body: refresh_token, accounts_server)' },
+      { method: 'GET',  path: '/api/zoho/user', description: 'Fetch Zoho user info', example: 'GET https://<base_url>/api/zoho/user?access_token=<token>&api_domain=https://www.zohoapis.com' },
+      { method: 'GET',  path: '/api/zoho/contacts', description: 'Fetch Zoho CRM contacts', example: 'GET https://<base_url>/api/zoho/contacts?access_token=<token>&api_domain=https://www.zohoapis.com' },
+      { method: 'GET',  path: '/api/zoho/token-status', description: 'Validate an access token against Zoho accounts', example: 'GET https://<base_url>/api/zoho/token-status?access_token=<token>&accounts_server=https://accounts.zoho.com' },
+      { method: 'POST', path: '/api/zoho/refresh', description: 'Exchange refresh_token for new access_token', example: 'POST https://<base_url>/api/zoho/refresh  {"refresh_token":"<refresh_token>","accounts_server":"https://accounts.zoho.com"}' },
 
-      { method: 'GET',  path: '/api/zoho/books/contacts', description: 'Fetch Zoho Books contacts (requires access_token, organization_id, optional api_domain)' },
-      { method: 'POST', path: '/api/zoho/books/contacts', description: 'Create Zoho Books contact (JSON body: access_token, organization_id, api_domain, contact_name, email, phone)' },
-      { method: 'GET',  path: '/api/zoho/books/invoices', description: 'Fetch Zoho Books invoices (requires access_token, organization_id, optional api_domain)' },
-      { method: 'GET',  path: '/api/n8n/sync-invoices', description: 'Fetch Zoho Books invoices and POST to webhook_url (requires access_token, organization_id, api_domain, webhook_url)' },
+      { method: 'GET',  path: '/api/zoho/books/contacts', description: 'Fetch Zoho Books contacts', example: 'GET https://<base_url>/api/zoho/books/contacts?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca' },
+      { method: 'POST', path: '/api/zoho/books/contacts', description: 'Create Zoho Books contact', example: 'POST https://<base_url>/api/zoho/books/contacts  {"access_token":"<token>","organization_id":"<org_id>","api_domain":"https://www.zohoapis.ca","contact_name":"Test Contact","email":"test@example.com","phone":"1234567890"}' },
 
-      { method: 'GET',  path: '/debug/routes', description: 'Temporary: list raw registered routes (dev only)' }
-    ]
+      { method: 'GET',  path: '/api/zoho/books/invoices', description: 'Fetch Zoho Books invoices', example: 'GET https://<base_url>/api/zoho/books/invoices?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca' },
+
+      { method: 'GET',  path: '/api/n8n/sync-contacts', description: 'Fetch Zoho Books contacts and POST to webhook', example: 'GET https://<base_url>/api/n8n/sync-contacts?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca&webhook_url=<your_webhook_url>' },
+      { method: 'GET',  path: '/api/n8n/sync-invoices', description: 'Fetch Zoho Books invoices and POST to webhook', example: 'GET https://<base_url>/api/n8n/sync-invoices?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca&webhook_url=<your_webhook_url>' },
+
+      { method: 'GET',  path: '/api/docs', description: 'Return structured API documentation', example: 'GET https://<base_url>/api/docs' },
+      { method: 'GET',  path: '/debug/routes', description: 'Temporary: list raw registered routes (dev only)', example: 'GET https://<base_url>/debug/routes' }
+    ],
+    note: 'Replace <base_url>, <token>, <org_id>, <auth_code>, <refresh_token>, and <your_webhook_url> with real values.'
   });
 });
 
