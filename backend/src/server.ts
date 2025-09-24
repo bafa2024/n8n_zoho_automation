@@ -502,6 +502,33 @@ app.get('/debug/routes', (_req, res) => {
   });
 });
 
+// Public API documentation endpoint (before auth middleware)
+app.get('/api/docs', (_req, res) => {
+  res.json({
+    endpoints: [
+      { method: 'GET',  path: '/api/health', description: 'Check backend health status' },
+      { method: 'GET',  path: '/api/version', description: 'Return backend version' },
+      { method: 'GET',  path: '/api/time', description: 'Return current server time (ISO)' },
+      { method: 'GET',  path: '/api/env-check', description: 'Show OAuth-related environment variable status' },
+
+      { method: 'GET',  path: '/oauth/zoho/authorize', description: 'Redirect to Zoho OAuth with ZohoBooks.fullaccess.all scope' },
+      { method: 'GET',  path: '/oauth/zoho/callback', description: 'Handle Zoho OAuth callback and exchange code for tokens' },
+
+      { method: 'GET',  path: '/api/zoho/user', description: 'Fetch Zoho user info (requires access_token, optional api_domain)' },
+      { method: 'GET',  path: '/api/zoho/contacts', description: 'Fetch Zoho CRM contacts (requires access_token, optional api_domain)' },
+      { method: 'GET',  path: '/api/zoho/token-status', description: 'Validate an access token against Zoho accounts (requires access_token, optional accounts_server)' },
+      { method: 'POST', path: '/api/zoho/refresh', description: 'Exchange refresh_token for new access_token (JSON body: refresh_token, accounts_server)' },
+
+      { method: 'GET',  path: '/api/zoho/books/contacts', description: 'Fetch Zoho Books contacts (requires access_token, organization_id, optional api_domain)' },
+      { method: 'POST', path: '/api/zoho/books/contacts', description: 'Create Zoho Books contact (JSON body: access_token, organization_id, api_domain, contact_name, email, phone)' },
+
+      { method: 'GET',  path: '/api/n8n/sync-contacts', description: 'Fetch Zoho Books contacts and POST to webhook_url (requires access_token, organization_id, api_domain, webhook_url)' },
+
+      { method: 'GET',  path: '/debug/routes', description: 'Temporary: list raw registered routes (dev only)' }
+    ]
+  });
+});
+
 // Public n8n sync contacts endpoint (before auth middleware)
 app.get('/api/n8n/sync-contacts', async (req, res) => {
   const { access_token, organization_id, api_domain, webhook_url } = req.query;
