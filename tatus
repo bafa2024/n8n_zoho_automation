@@ -1,0 +1,130 @@
+warning: in the working copy of 'backend/src/server.ts', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/backend/README.md b/backend/README.md[m
+[1mindex f785fc8..870700d 100644[m
+[1m--- a/backend/README.md[m
+[1m+++ b/backend/README.md[m
+[36m@@ -259,5 +259,6 @@[m [mFor issues and questions:[m
+ [m
+ [m
+ [m
+[41m+[m
+ [m
+ [m
+[1mdiff --git a/backend/src/server.ts b/backend/src/server.ts[m
+[1mindex a50a8a2..1b3e1b1 100644[m
+[1m--- a/backend/src/server.ts[m
+[1m+++ b/backend/src/server.ts[m
+[36m@@ -493,6 +493,41 @@[m [mapp.get('/api/zoho/books/invoices', async (req, res) => {[m
+   }[m
+ });[m
+ [m
+[32m+[m[32m// Public Zoho Books payments endpoint (before auth middleware)[m
+[32m+[m[32mapp.get('/api/zoho/books/payments', async (req, res) => {[m
+[32m+[m[32m  const { access_token, organization_id, api_domain } = req.query;[m
+[32m+[m[41m  [m
+[32m+[m[32m  if (!access_token || !organization_id) {[m
+[32m+[m[32m    return res.status(400).json({ error: "missing_parameters" });[m
+[32m+[m[32m  }[m
+[32m+[m[41m  [m
+[32m+[m[32m  try {[m
+[32m+[m[32m    // Safely build the API URL with sanitization[m
+[32m+[m[32m    const baseApi = (typeof api_domain === 'string' && api_domain) ? String(api_domain).trim() : 'https://www.zohoapis.com';[m
+[32m+[m[32m    const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, '');[m
+[32m+[m[32m    const url = `${cleanBase}/books/v3/payments?organization_id=${organization_id}`;[m
+[32m+[m[41m    [m
+[32m+[m[32m    const paymentsResponse = await fetch(url, {[m
+[32m+[m[32m      method: 'GET',[m
+[32m+[m[32m      headers: {[m
+[32m+[m[32m        'Authorization': `Zoho-oauthtoken ${access_token}`,[m
+[32m+[m[32m        'Content-Type': 'application/json'[m
+[32m+[m[32m      }[m
+[32m+[m[32m    });[m
+[32m+[m[41m    [m
+[32m+[m[32m    const paymentsData = await paymentsResponse.json() as any;[m
+[32m+[m[41m    [m
+[32m+[m[32m    if (!paymentsResponse.ok) {[m
+[32m+[m[32m      return res.status(paymentsResponse.status).json(paymentsData);[m
+[32m+[m[32m    }[m
+[32m+[m[41m    [m
+[32m+[m[32m    res.json(paymentsData);[m
+[32m+[m[32m  } catch (error) {[m
+[32m+[m[32m    console.error('Zoho Books payments API error:', error);[m
+[32m+[m[32m    res.status(500).json({ error: "internal_error" });[m
+[32m+[m[32m  }[m
+[32m+[m[32m});[m
+[32m+[m
+ // Public n8n sync invoices endpoint (before auth middleware)[m
+ app.get('/api/n8n/sync-invoices', async (req, res) => {[m
+   const { access_token, organization_id, api_domain, webhook_url } = req.query;[m
+[36m@@ -546,6 +581,59 @@[m [mapp.get('/api/n8n/sync-invoices', async (req, res) => {[m
+   }[m
+ });[m
+ [m
+[32m+[m[32m// Public n8n sync payments endpoint (before auth middleware)[m
+[32m+[m[32mapp.get('/api/n8n/sync-payments', async (req, res) => {[m
+[32m+[m[32m  const { access_token, organization_id, api_domain, webhook_url } = req.query;[m
+[32m+[m[41m  [m
+[32m+[m[32m  // Basic validation[m
+[32m+[m[32m  if (!access_token || !organization_id || !api_domain || !webhook_url) {[m
+[32m+[m[32m    return res.status(400).json({ error: "missing_parameters" });[m
+[32m+[m[32m  }[m
+[32m+[m[41m  [m
+[32m+[m[32m  try {[m
+[32m+[m[32m    // Build Zoho Books payments URL[m
+[32m+[m[32m    const baseApi = (typeof api_domain === 'string' && api_domain) ? String(api_domain).trim() : 'https://www.zohoapis.com';[m
+[32m+[m[32m    const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, '');[m
+[32m+[m[32m    const zohoUrl = `${cleanBase}/books/v3/payments?organization_id=${organization_id}`;[m
+[32m+[m[41m    [m
+[32m+[m[32m    // Fetch payments from Zoho Books[m
+[32m+[m[32m    const zohoResponse = await fetch(zohoUrl, {[m
+[32m+[m[32m      method: 'GET',[m
+[32m+[m[32m      headers: {[m
+[32m+[m[32m        'Authorization': `Zoho-oauthtoken ${access_token}`,[m
+[32m+[m[32m        'Content-Type': 'application/json'[m
+[32m+[m[32m      }[m
+[32m+[m[32m    });[m
+[32m+[m[32m    const paymentsData = await zohoResponse.json() as any;[m
+[32m+[m[32m    if (!zohoResponse.ok) {[m
+[32m+[m[32m      return res.status(zohoResponse.status).json(paymentsData);[m
+[32m+[m[32m    }[m
+[32m+[m[41m    [m
+[32m+[m[32m    // Forward to webhook[m
+[32m+[m[32m    const webhookResponse = await fetch(String(webhook_url), {[m
+[32m+[m[32m      method: 'POST',[m
+[32m+[m[32m      headers: {[m
+[32m+[m[32m        'Content-Type': 'application/json'[m
+[32m+[m[32m      },[m
+[32m+[m[32m      body: JSON.stringify(paymentsData)[m
+[32m+[m[32m    });[m
+[32m+[m[32m    if (!webhookResponse.ok) {[m
+[32m+[m[32m      const webhookError = await webhookResponse.text();[m
+[32m+[m[32m      return res.status(webhookResponse.status).json({[m[41m [m
+[32m+[m[32m        error: 'webhook_failed',[m[41m [m
+[32m+[m[32m        webhook_status: webhookResponse.status,[m
+[32m+[m[32m        webhook_error: webhookError[m[41m [m
+[32m+[m[32m      });[m
+[32m+[m[32m    }[m
+[32m+[m[41m    [m
+[32m+[m[32m    const paymentCount = paymentsData.payments?.length || 0;[m
+[32m+[m[32m    res.json({ status: 'synced', count: paymentCount });[m
+[32m+[m[32m  } catch (error) {[m
+[32m+[m[32m    console.error('n8n sync payments error:', error);[m
+[32m+[m[32m    res.status(500).json({ error: 'internal_error' });[m
+[32m+[m[32m  }[m
+[32m+[m[32m});[m
+[32m+[m
+ // Public OAuth debug endpoint (before auth middleware)[m
+ app.get('/api/debug-oauth', (_req, res) => {[m
+   res.json({[m
+[36m@@ -611,9 +699,11 @@[m [mapp.get('/api/docs', (_req, res) => {[m
+       { method: 'POST', path: '/api/zoho/books/contacts', description: 'Create Zoho Books contact', example: 'POST https://<base_url>/api/zoho/books/contacts  {"access_token":"<token>","organization_id":"<org_id>","api_domain":"https://www.zohoapis.ca","contact_name":"Test Contact","email":"test@example.com","phone":"1234567890"}' },[m
+ [m
+       { method: 'GET',  path: '/api/zoho/books/invoices', description: 'Fetch Zoho Books invoices', example: 'GET https://<base_url>/api/zoho/books/invoices?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca' },[m
+[32m+[m[32m      { method: 'GET',  path: '/api/zoho/books/payments', description: 'Fetch Zoho Books payments', example: 'GET https://<base_url>/api/zoho/books/payments?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca' },[m
+ [m
+       { method: 'GET',  path: '/api/n8n/sync-contacts', description: 'Fetch Zoho Books contacts and POST to webhook', example: 'GET https://<base_url>/api/n8n/sync-contacts?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca&webhook_url=<your_webhook_url>' },[m
+       { method: 'GET',  path: '/api/n8n/sync-invoices', description: 'Fetch Zoho Books invoices and POST to webhook', example: 'GET https://<base_url>/api/n8n/sync-invoices?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca&webhook_url=<your_webhook_url>' },[m
+[32m+[m[32m      { method: 'GET',  path: '/api/n8n/sync-payments', description: 'Fetch Zoho Books payments and POST to webhook', example: 'GET https://<base_url>/api/n8n/sync-payments?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca&webhook_url=<your_webhook_url>' },[m
+ [m
+       { method: 'GET',  path: '/api/docs', description: 'Return structured API documentation', example: 'GET https://<base_url>/api/docs' },[m
+       { method: 'GET',  path: '/debug/routes', description: 'Temporary: list raw registered routes (dev only)', example: 'GET https://<base_url>/debug/routes' }[m
