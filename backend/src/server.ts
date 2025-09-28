@@ -634,6 +634,94 @@ app.get('/api/n8n/sync-payments', async (req, res) => {
   }
 });
 
+// Public Zoho Books items endpoint (before auth middleware)
+app.get('/api/zoho/books/items', async (req, res) => {
+  const { access_token, organization_id, api_domain } = req.query;
+  
+  if (!access_token || !organization_id) {
+    return res.status(400).json({ error: "missing_parameters" });
+  }
+  
+  try {
+    // Safely build the API URL with sanitization
+    const baseApi = (typeof api_domain === 'string' && api_domain) ? String(api_domain).trim() : 'https://www.zohoapis.com';
+    const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, '');
+    const url = `${cleanBase}/books/v3/items?organization_id=${organization_id}`;
+    
+    const itemsResponse = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const itemsData = await itemsResponse.json() as any;
+    
+    if (!itemsResponse.ok) {
+      return res.status(itemsResponse.status).json(itemsData);
+    }
+    
+    res.json(itemsData);
+  } catch (error) {
+    console.error('Zoho Books items API error:', error);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// Public n8n sync items endpoint (before auth middleware)
+app.get('/api/n8n/sync-items', async (req, res) => {
+  const { access_token, organization_id, api_domain, webhook_url } = req.query;
+  
+  // Basic validation
+  if (!access_token || !organization_id || !api_domain || !webhook_url) {
+    return res.status(400).json({ error: "missing_parameters" });
+  }
+  
+  try {
+    // Build Zoho Books items URL
+    const baseApi = (typeof api_domain === 'string' && api_domain) ? String(api_domain).trim() : 'https://www.zohoapis.com';
+    const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, '');
+    const zohoUrl = `${cleanBase}/books/v3/items?organization_id=${organization_id}`;
+    
+    // Fetch items from Zoho Books
+    const zohoResponse = await fetch(zohoUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const itemsData = await zohoResponse.json() as any;
+    if (!zohoResponse.ok) {
+      return res.status(zohoResponse.status).json(itemsData);
+    }
+    
+    // Forward to webhook
+    const webhookResponse = await fetch(String(webhook_url), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(itemsData)
+    });
+    if (!webhookResponse.ok) {
+      const webhookError = await webhookResponse.text();
+      return res.status(webhookResponse.status).json({ 
+        error: 'webhook_failed', 
+        webhook_status: webhookResponse.status,
+        webhook_error: webhookError 
+      });
+    }
+    
+    const itemCount = itemsData.items?.length || 0;
+    res.json({ status: 'synced', count: itemCount });
+  } catch (error) {
+    console.error('n8n sync items error:', error);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 // Public OAuth debug endpoint (before auth middleware)
 app.get('/api/debug-oauth', (_req, res) => {
   res.json({
@@ -700,10 +788,12 @@ app.get('/api/docs', (_req, res) => {
 
       { method: 'GET',  path: '/api/zoho/books/invoices', description: 'Fetch Zoho Books invoices', example: 'GET https://<base_url>/api/zoho/books/invoices?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca' },
       { method: 'GET',  path: '/api/zoho/books/payments', description: 'Fetch Zoho Books payments', example: 'GET https://<base_url>/api/zoho/books/payments?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca' },
+      { method: 'GET',  path: '/api/zoho/books/items', description: 'Fetch Zoho Books items (products/services)', example: 'GET https://<base_url>/api/zoho/books/items?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca' },
 
       { method: 'GET',  path: '/api/n8n/sync-contacts', description: 'Fetch Zoho Books contacts and POST to webhook', example: 'GET https://<base_url>/api/n8n/sync-contacts?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca&webhook_url=<your_webhook_url>' },
       { method: 'GET',  path: '/api/n8n/sync-invoices', description: 'Fetch Zoho Books invoices and POST to webhook', example: 'GET https://<base_url>/api/n8n/sync-invoices?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca&webhook_url=<your_webhook_url>' },
       { method: 'GET',  path: '/api/n8n/sync-payments', description: 'Fetch Zoho Books payments and POST to webhook', example: 'GET https://<base_url>/api/n8n/sync-payments?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca&webhook_url=<your_webhook_url>' },
+      { method: 'GET',  path: '/api/n8n/sync-items', description: 'Fetch Zoho Books items and POST to webhook', example: 'GET https://<base_url>/api/n8n/sync-items?access_token=<token>&organization_id=<org_id>&api_domain=https://www.zohoapis.ca&webhook_url=<your_webhook_url>' },
 
       { method: 'GET',  path: '/api/docs', description: 'Return structured API documentation', example: 'GET https://<base_url>/api/docs' },
       { method: 'GET',  path: '/debug/routes', description: 'Temporary: list raw registered routes (dev only)', example: 'GET https://<base_url>/debug/routes' }
