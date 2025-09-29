@@ -107,7 +107,7 @@ app.get('/oauth/zoho/authorize', (_req, res) => {
   // Generate random state for security
   const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
   
-  const authUrl = `https://accounts.zoho.com/oauth/v2/auth?response_type=code&client_id=${clientId}&scope=ZohoBooks.fullaccess.all,ZohoBooks.invoices.READ,ZohoBooks.invoices.CREATE,ZohoBooks.items.READ&redirect_uri=${encodeURIComponent(redirectUri)}&access_type=offline&state=${state}`;
+  const authUrl = `https://accounts.zoho.com/oauth/v2/auth?response_type=code&client_id=${clientId}&scope=ZohoBooks.fullaccess.all,ZohoBooks.invoices.READ,ZohoBooks.invoices.CREATE,ZohoBooks.items.READ,ZohoBooks.payments.READ&redirect_uri=${encodeURIComponent(redirectUri)}&access_type=offline&state=${state}`;
   
   res.redirect(302, authUrl);
 });
@@ -502,10 +502,10 @@ app.get('/api/zoho/books/payments', async (req, res) => {
   }
   
   try {
-    // Safely build the API URL with sanitization
+    // Safely build the API URL with sanitization - using correct /customerpayments endpoint
     const baseApi = (typeof api_domain === 'string' && api_domain) ? String(api_domain).trim() : 'https://www.zohoapis.com';
     const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, '');
-    const url = `${cleanBase}/books/v3/payments?organization_id=${organization_id}`;
+    const url = `${cleanBase}/books/v3/customerpayments?organization_id=${organization_id}`;
     
     const paymentsResponse = await fetch(url, {
       method: 'GET',
@@ -518,6 +518,22 @@ app.get('/api/zoho/books/payments', async (req, res) => {
     const paymentsData = await paymentsResponse.json() as any;
     
     if (!paymentsResponse.ok) {
+      // Proactive fallback handling for common Zoho errors
+      if (paymentsData.code === 37) {
+        return res.status(400).json({
+          error: "wrong_endpoint",
+          hint: "Use /customerpayments instead of /payments"
+        });
+      }
+      
+      if (paymentsData.code === 57) {
+        return res.status(401).json({
+          error: "scope_missing",
+          hint: "Reauthorize with ZohoBooks.payments.READ scope"
+        });
+      }
+      
+      // Forward other Zoho errors as-is
       return res.status(paymentsResponse.status).json(paymentsData);
     }
     
@@ -591,10 +607,10 @@ app.get('/api/n8n/sync-payments', async (req, res) => {
   }
   
   try {
-    // Build Zoho Books payments URL
+    // Build Zoho Books payments URL - using correct /customerpayments endpoint
     const baseApi = (typeof api_domain === 'string' && api_domain) ? String(api_domain).trim() : 'https://www.zohoapis.com';
     const cleanBase = baseApi.replace(/\/+$/, '').replace(/[\r\n]/g, '');
-    const zohoUrl = `${cleanBase}/books/v3/payments?organization_id=${organization_id}`;
+    const zohoUrl = `${cleanBase}/books/v3/customerpayments?organization_id=${organization_id}`;
     
     // Fetch payments from Zoho Books
     const zohoResponse = await fetch(zohoUrl, {
@@ -605,7 +621,24 @@ app.get('/api/n8n/sync-payments', async (req, res) => {
       }
     });
     const paymentsData = await zohoResponse.json() as any;
+    
     if (!zohoResponse.ok) {
+      // Proactive fallback handling for common Zoho errors
+      if (paymentsData.code === 37) {
+        return res.status(400).json({
+          error: "wrong_endpoint",
+          hint: "Use /customerpayments instead of /payments"
+        });
+      }
+      
+      if (paymentsData.code === 57) {
+        return res.status(401).json({
+          error: "scope_missing",
+          hint: "Reauthorize with ZohoBooks.payments.READ scope"
+        });
+      }
+      
+      // Forward other Zoho errors as-is
       return res.status(zohoResponse.status).json(paymentsData);
     }
     
@@ -626,7 +659,7 @@ app.get('/api/n8n/sync-payments', async (req, res) => {
       });
     }
     
-    const paymentCount = paymentsData.payments?.length || 0;
+    const paymentCount = paymentsData.customerpayments?.length || 0;
     res.json({ status: 'synced', count: paymentCount });
   } catch (error) {
     console.error('n8n sync payments error:', error);
