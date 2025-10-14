@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync } from 'fs';
 import multer from 'multer';
+import Database from 'better-sqlite3';
 import { config } from './config.js';
 import { ensureDir } from './lib/fsutil.js';
 import './db.js';
@@ -974,6 +975,61 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err);
   res.status(500).json({ error: 'internal_error' });
 });
+
+// ==================== NEW ROUTES: /api/runs ====================
+
+// GET all recent runs (Dashboard table)
+app.get('/api/runs', async (req, res) => {
+  try {
+    const db = new Database(process.env.DB_PATH || './data/app.db');
+
+    const rows = db.prepare(`
+      SELECT 
+        id,
+        invoice_name AS invoice,
+        vendor,
+        status,
+        items_count AS items,
+        total_bill AS bill,
+        created_at AS 'when'
+      FROM runs
+      ORDER BY created_at DESC
+      LIMIT 20;
+    `).all();
+
+    db.close();
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching runs:', err);
+    res.status(500).json({ error: 'Failed to load runs from database' });
+  }
+});
+
+// GET a single run by ID
+app.get('/api/runs/:id', async (req, res) => {
+  try {
+    const db = new Database(process.env.DB_PATH || './data/app.db');
+    const row = db.prepare('SELECT * FROM runs WHERE id = ?').get(req.params.id);
+    db.close();
+    if (!row) return res.status(404).json({ error: 'Run not found' });
+    res.json(row);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load run details' });
+  }
+});
+
+// POST new upload trigger (demo handler)
+app.post('/api/runs/ingest', async (req, res) => {
+  try {
+    res.json({ message: 'Upload received successfully (backend operational)' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// ==============================================================
 
 app.listen(config.port, () => {
   console.log(`API + static UI at ${config.publicBaseUrl} (Zoho mode: ${process.env.ZOHO_MODE || 'auto'})`);
