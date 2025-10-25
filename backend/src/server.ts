@@ -937,42 +937,29 @@ app.post('/upload', upload.single('file'), async (req, res) => {
       path: req.file.path
     });
 
-    // Send file to FastAPI parser
-    try {
-      const formData = new FormData();
-      formData.append('file', createReadStream(req.file.path));
+    // Create FormData and send to FastAPI parser
+    const formData = new FormData();
+    formData.append('file', createReadStream(req.file.path));
 
-      const parserResponse = await axios.post(
-        'http://localhost:8000/parse',
-        formData,
-        { 
-          headers: {
-            ...formData.getHeaders()
-          },
-          timeout: 30000 // 30 second timeout
-        }
-      );
+    const response = await axios.post(
+      'http://localhost:8000/parse',
+      formData,
+      { 
+        headers: {
+          ...formData.getHeaders()
+        },
+        timeout: 30000 // 30 second timeout
+      }
+    );
 
-      const parsed = parserResponse.data;
-      console.log('Parsed result:', parsed);
+    console.log('Parsed result:', response.data);
 
-      // Return the parsed data directly to frontend
-      return res.json(parsed);
+    // Return the parsed JSON to frontend
+    res.json(response.data);
 
-    } catch (parserError: any) {
-      console.error('Parser Error:', parserError.message);
-      return res.status(500).json({ 
-        error: 'Parsing failed', 
-        details: parserError.message 
-      });
-    }
-
-  } catch (error: any) {
-    console.error('Upload Error:', error.message);
-    return res.status(500).json({ 
-      error: 'Upload failed', 
-      details: error.message 
-    });
+  } catch (err: any) {
+    console.error('Parser Error:', err.message);
+    res.status(500).json({ error: 'Failed to parse invoice' });
   }
 });
 
