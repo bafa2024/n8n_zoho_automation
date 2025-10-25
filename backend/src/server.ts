@@ -930,14 +930,12 @@ app.post('/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'file_required' });
     }
     
-    // Basic upload confirmation
-    const uploadResult = {
-      success: true,
+    console.log('File uploaded:', {
       filename: req.file.filename,
       originalname: req.file.originalname,
       size: req.file.size,
       path: req.file.path
-    };
+    });
 
     // Send file to FastAPI parser
     try {
@@ -945,12 +943,11 @@ app.post('/upload', upload.single('file'), async (req, res) => {
       formData.append('file', createReadStream(req.file.path));
 
       const parserResponse = await axios.post(
-        'http://178.128.68.54:8000/parse',
+        'http://localhost:8000/parse',
         formData,
         { 
           headers: {
-            ...formData.getHeaders(),
-            'Content-Type': 'multipart/form-data'
+            ...formData.getHeaders()
           },
           timeout: 30000 // 30 second timeout
         }
@@ -959,22 +956,14 @@ app.post('/upload', upload.single('file'), async (req, res) => {
       const parsed = parserResponse.data;
       console.log('Parsed result:', parsed);
 
-      // Return combined result
-      return res.json({
-        ...uploadResult,
-        parsed,
-        message: 'Upload and parse successful'
-      });
+      // Return the parsed data directly to frontend
+      return res.json(parsed);
 
     } catch (parserError: any) {
       console.error('Parser Error:', parserError.message);
-      
-      // Return upload success but parsing failure
-      return res.json({
-        ...uploadResult,
-        parsed: null,
-        parseError: parserError.message,
-        message: 'Upload successful, but parsing failed'
+      return res.status(500).json({ 
+        error: 'Parsing failed', 
+        details: parserError.message 
       });
     }
 
