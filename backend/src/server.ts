@@ -3,9 +3,11 @@ import cors from 'cors';
 import morgan from 'morgan';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { readFileSync } from 'fs';
+import { readFileSync, createReadStream } from 'fs';
 import multer from 'multer';
 import Database from 'better-sqlite3';
+import axios from 'axios';
+import FormData from 'form-data';
 import { config } from './config.js';
 import { ensureDir } from './lib/fsutil.js';
 import './db.js';
@@ -922,18 +924,67 @@ app.get('/api/n8n/sync-contacts', async (req, res) => {
 });
 
 // Public upload endpoint (before auth middleware)
-app.post('/upload', upload.single('file'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'file_required' });
+app.post('/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'file_required' });
+    }
+    
+    // Basic upload confirmation
+    const uploadResult = {
+      success: true,
+      filename: req.file.filename,
+      originalname: req.file.originalname,
+      size: req.file.size,
+      path: req.file.path
+    };
+
+    // Send file to FastAPI parser
+    try {
+      const formData = new FormData();
+      formData.append('file', createReadStream(req.file.path));
+
+      const parserResponse = await axios.post(
+        'http://178.128.68.54:8000/parse',
+        formData,
+        { 
+          headers: {
+            ...formData.getHeaders(),
+            'Content-Type': 'multipart/form-data'
+          },
+          timeout: 30000 // 30 second timeout
+        }
+      );
+
+      const parsed = parserResponse.data;
+      console.log('Parsed result:', parsed);
+
+      // Return combined result
+      return res.json({
+        ...uploadResult,
+        parsed,
+        message: 'Upload and parse successful'
+      });
+
+    } catch (parserError: any) {
+      console.error('Parser Error:', parserError.message);
+      
+      // Return upload success but parsing failure
+      return res.json({
+        ...uploadResult,
+        parsed: null,
+        parseError: parserError.message,
+        message: 'Upload successful, but parsing failed'
+      });
+    }
+
+  } catch (error: any) {
+    console.error('Upload Error:', error.message);
+    return res.status(500).json({ 
+      error: 'Upload failed', 
+      details: error.message 
+    });
   }
-  
-  res.json({
-    success: true,
-    filename: req.file.filename,
-    originalname: req.file.originalname,
-    size: req.file.size,
-    path: req.file.path
-  });
 });
 
 // Auth middleware for /api routes
