@@ -41,7 +41,7 @@
   </main>
 
   <script>
-    const API_BASE = (localStorage.getItem('API_BASE') || 'http://localhost:5050').replace(/\/$/,'');
+    const API_BASE = window.location.origin;
 
     function q(k){ return new URLSearchParams(location.search).get(k); }
     function openJsonWindow(obj,title){
@@ -53,7 +53,11 @@
       const headers = {};
       const token = localStorage.getItem('API_TOKEN');
       if (token) headers['X-Auth-Token'] = token;
-      return (await fetch(API_BASE+'/api/runs/'+id, { headers })).json().then(j=>j.run); 
+      const response = await fetch(API_BASE+'/api/runs/'+id, { headers });
+      if (!response.ok) {
+        throw new Error(`Failed to load run: ${response.status} ${response.statusText}`);
+      }
+      return (await response.json()); 
     }
     async function apiCreateDraft(id){ 
       const headers = {};

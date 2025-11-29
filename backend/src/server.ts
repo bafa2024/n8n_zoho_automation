@@ -3,6 +3,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import { readFileSync, createReadStream } from 'fs';
 import multer from 'multer';
 import Database from 'better-sqlite3';
@@ -10,14 +11,103 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { config } from './config.js';
 import { ensureDir } from './lib/fsutil.js';
+import { saveRun as saveRunToDb, loadRuns } from './db.js';
+import { newRunId } from './lib/id.js';
+import type { Run, RunStatus } from './types.js';
+import * as dataStore from './dataStore.js';
 import './db.js';
 import { runsRouter } from './routes/runs.js';
 import { zohoRouter } from './routes/zoho.js';
 import { oauthRouter } from './routes/oauth.js';
 import { infoRouter } from './routes/info.js';
+import { processBillRun } from './services/billProcessor.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Helper function to notify n8n webhook
+async function notifyN8N(run: Run): Promise<void> {
+  // Check if n8n integration is disabled
+  if (process.env.N8N_DISABLED === 'true') {
+    console.log(`n8n integration disabled for run ${run.id} (N8N_DISABLED=true)`);
+    return;
+  }
+
+  const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || "http://localhost:5678/webhook/zoho-bill-process";
+  
+  try {
+    console.log(`Notifying n8n webhook for run ${run.id}...`);
+    console.log(`Webhook URL: ${n8nWebhookUrl}`);
+    
+    // Update status to "processing" before sending
+    dataStore.updateRun(run.id, { status: "processing" });
+    
+    // Prepare payload with run ID and parsed data
+    const payload = {
+      runId: run.id,
+      ...(run.raw || {})
+    };
+    
+    console.log(`Payload size: ${JSON.stringify(payload).length} bytes`);
+    
+    const response = await axios.post(
+      n8nWebhookUrl,
+      payload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        timeout: 30000, // 30 second timeout
+        validateStatus: (status) => status < 500, // Don't throw on 4xx errors
+      }
+    );
+    
+    console.log(`n8n webhook response for run ${run.id}:`, {
+      status: response.status,
+      statusText: response.statusText,
+      data: response.data
+    });
+    
+    // If n8n returns a non-2xx status, log it but don't mark as error
+    // (n8n might return 200 even if processing fails, or use callback for errors)
+    if (response.status >= 400) {
+      console.warn(`n8n webhook returned ${response.status} for run ${run.id}`);
+    }
+    
+    // Note: n8n will call back via /api/n8n/callback to update the final status
+    // We don't update status here - wait for callback
+    
+  } catch (err: any) {
+    // Enhanced error logging
+    const errorDetails = {
+      message: err.message,
+      code: err.code,
+      response: err.response ? {
+        status: err.response.status,
+        statusText: err.response.statusText,
+        data: err.response.data
+      } : null,
+      request: err.request ? {
+        url: err.config?.url,
+        method: err.config?.method
+      } : null
+    };
+    
+    console.error(`n8n webhook error for run ${run.id}:`, JSON.stringify(errorDetails, null, 2));
+    
+    // If n8n is not available, don't mark as error - just log and keep status as "parsed"
+    // This allows the system to work without n8n
+    if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
+      console.warn(`n8n is not available. Run ${run.id} will remain with status "parsed".`);
+      console.warn(`To disable n8n integration, set N8N_DISABLED=true`);
+      // Revert status back to "parsed" since n8n is not available
+      dataStore.updateRun(run.id, { status: "parsed" });
+    } else {
+      // For other errors, mark as error
+      dataStore.updateRun(run.id, { status: "error" });
+    }
+  }
+}
 
 // Read package.json version
 const packageJsonPath = path.join(__dirname, '..', 'package.json');
@@ -42,7 +132,11 @@ const upload = multer({
   limits: { fileSize: 30 * 1024 * 1024 }, // 30MB limit
 });
 
-app.use(cors());
+app.use(cors({
+  origin: ["http://localhost:10000"],
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Accept"],
+}));
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
 
@@ -924,7 +1018,7 @@ app.get('/api/n8n/sync-contacts', async (req, res) => {
 });
 
 // Public upload endpoint (before auth middleware)
-app.post('/upload', upload.single('file'), async (req, res) => {
+app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'file_required' });
@@ -954,12 +1048,108 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
     console.log('Parsed result:', response.data);
 
-    // Return the parsed JSON to frontend
-    res.json(response.data);
+    const parsed = response.data;
+
+    // Create and save run record
+    const run: Run = {
+      id: newRunId(),
+      invoice: parsed.header?.invoiceNo ?? null,
+      vendor: parsed.header?.vendor ?? null,
+      status: parsed.header ? "parsed" : "error",
+      items: parsed.items?.length ?? 0,
+      bill: null,
+      when: new Date().toISOString(),
+      raw: parsed
+    };
+
+    // Save to both db.ts (for compatibility) and dataStore
+    await saveRunToDb(run);
+    dataStore.saveRun(run);
+
+    // Process bill run in background (non-blocking)
+    // This will handle: vendor → items → bill → n8n → status updates
+    setImmediate(() => {
+      processBillRun(run).catch((err) => {
+        console.error(`Failed to process bill run ${run.id}:`, err);
+        // Error is already handled in processBillRun (status set to 'error')
+        // Just log here to prevent unhandled promise rejection
+      });
+    });
+
+    // Return the parsed JSON to frontend immediately
+    res.json({
+      ok: true,
+      success: true,
+      runId: run.id,
+      run
+    });
 
   } catch (err: any) {
-    console.error('Parser Error:', err.message);
+    console.error("Parser Error:", err.message);
+    
+    // Create error run record
+    try {
+      const errorRun: Run = {
+        id: newRunId(),
+        invoice: null,
+        vendor: null,
+        status: "error",
+        items: 0,
+        bill: null,
+        when: new Date().toISOString(),
+        raw: { error: err.message }
+      };
+      await saveRunToDb(errorRun);
+      dataStore.saveRun(errorRun);
+    } catch (saveErr) {
+      console.error("Failed to save error run:", saveErr);
+    }
+    
     res.status(500).json({ error: 'Failed to parse invoice' });
+  }
+});
+
+// Public n8n callback endpoint (before auth middleware)
+app.post('/api/n8n/callback', (req, res) => {
+  try {
+    const { runId, billId, vendorId, status, error } = req.body;
+    
+    if (!runId) {
+      return res.status(400).json({ error: 'runId is required' });
+    }
+    
+    console.log(`n8n callback received for run ${runId}:`, { status, billId, vendorId, error });
+    
+    // Update run in file
+    const updateFields: Partial<Run> = {};
+    
+    if (status) {
+      // Validate status is one of the allowed values
+      const validStatuses: RunStatus[] = ["parsed", "processing", "completed", "error"];
+      if (validStatuses.includes(status)) {
+        updateFields.status = status as RunStatus;
+      }
+    }
+    
+    if (billId) {
+      updateFields.bill = billId;
+    }
+    
+    if (vendorId) {
+      updateFields.vendor = vendorId;
+    }
+    
+    if (status === "error" || error) {
+      updateFields.status = "error";
+    }
+    
+    dataStore.updateRun(runId, updateFields);
+    
+    res.status(200).json({ success: true, message: `Run ${runId} updated` });
+    
+  } catch (err) {
+    console.error("Error processing n8n callback:", err);
+    res.status(500).json({ error: "Failed to process callback" });
   }
 });
 
@@ -1005,44 +1195,28 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 
 // ==================== NEW ROUTES: /api/runs ====================
 
-// GET all recent runs (Dashboard table)
-app.get('/api/runs', async (req, res) => {
+// GET runs with pagination
+app.get("/api/runs", (req, res) => {
   try {
-    const db = new Database(process.env.DB_PATH || './data/app.db');
-
-    const rows = db.prepare(`
-      SELECT 
-        id,
-        invoice_name AS invoice,
-        vendor,
-        status,
-        items_count AS items,
-        total_bill AS bill,
-        created_at AS 'when'
-      FROM runs
-      ORDER BY created_at DESC
-      LIMIT 20;
-    `).all();
-
-    db.close();
-    res.json(rows);
+    const limit = parseInt(req.query.limit as string) || 20;
+    const result = dataStore.listRuns(limit);
+    res.json(result);
   } catch (err) {
-    console.error('Error fetching runs:', err);
-    res.status(500).json({ error: 'Failed to load runs from database' });
+    console.error("Error reading runs:", err);
+    res.status(500).json({ error: "Failed to load runs" });
   }
 });
 
 // GET a single run by ID
-app.get('/api/runs/:id', async (req, res) => {
+app.get("/api/runs/:id", (req, res) => {
   try {
-    const db = new Database(process.env.DB_PATH || './data/app.db');
-    const row = db.prepare('SELECT * FROM runs WHERE id = ?').get(req.params.id);
-    db.close();
-    if (!row) return res.status(404).json({ error: 'Run not found' });
-    res.json(row);
+    const id = req.params.id;
+    const run = dataStore.getRunById(id);
+    if (!run) return res.status(404).json({ error: "Not found" });
+    res.json(run);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to load run details' });
+    console.error("Error:", err);
+    res.status(500).json({ error: "Failed" });
   }
 });
 
@@ -1061,3 +1235,15 @@ app.post('/api/runs/ingest', async (req, res) => {
 app.listen(config.port, () => {
   console.log(`API + static UI at ${config.publicBaseUrl} (Zoho mode: ${process.env.ZOHO_MODE || 'auto'})`);
 });
+
+/*
+# Automated Test - Backend → Parser Integration
+curl -X POST http://localhost:3000/upload \
+  -F "file=@samples/test.pdf"
+
+# Expected:
+# 1. HTTP 200 response
+# 2. pm2 logs show:
+#    Parsed result: { header: {...}, items: [...], totals: {...} }
+# 3. Response JSON includes parsed fields
+*/

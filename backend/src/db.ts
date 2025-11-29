@@ -1,7 +1,9 @@
 import Database from 'better-sqlite3';
 import fs from 'fs';
+import fsPromises from 'fs/promises';
 import path from 'path';
 import { config } from './config.js';
+import type { Run } from './types.js';
 
 function ensureDir(p: string) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
@@ -58,3 +60,23 @@ CREATE TABLE IF NOT EXISTS tokens (
   expires_at INTEGER
 );
 `);
+
+// JSON file persistence for simplified Run interface
+const DATA_DIR = path.join(process.cwd(), 'data');
+const RUNS_FILE = path.join(DATA_DIR, 'runs.json');
+
+export async function loadRuns(): Promise<Run[]> {
+  try {
+    const raw = await fsPromises.readFile(RUNS_FILE, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveRun(run: Run): Promise<void> {
+  await fsPromises.mkdir(DATA_DIR, { recursive: true });
+  const runs = await loadRuns();
+  runs.unshift(run);
+  await fsPromises.writeFile(RUNS_FILE, JSON.stringify(runs, null, 2), 'utf8');
+}
