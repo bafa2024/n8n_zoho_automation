@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Zoho Bills Automation Console — Run Details</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100">
+  <div class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-8 rounded-xl bg-blue-600"></div>
+        <div class="font-semibold text-slate-900">Zoho Bills Automation — Demo</div>
+      </div>
+      <nav class="flex gap-1 rounded-xl bg-slate-100 p-1">
+        <a class="px-3 py-1.5 rounded-lg text-sm" href="index.html">Dashboard</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm" href="settings.html">Settings</a>
+        <a class="px-3 py-1.5 rounded-lg text-sm" href="logs.html">Logs</a>
+      </nav>
+    </div>
+  </div>
+
+  <main class="mx-auto max-w-7xl p-4 space-y-6">
+    <a href="index.html" class="text-blue-700 underline">&larr; Back</a>
+    <div id="runCard" class="rounded-2xl border p-4 bg-white"></div>
+
+    <div class="flex gap-2 flex-wrap">
+      <button id="btnCreateDraft" class="rounded bg-slate-900 text-white px-4 py-2">Create Draft Bill</button>
+      <button id="btnViewParsed" class="rounded border px-4 py-2">View parsed JSON</button>
+      <button id="btnViewZoho" class="rounded border px-4 py-2">View Zoho I/O</button>
+      <a id="btnDownloadParsed" class="rounded border px-4 py-2" download="parsed.json">Download parsed.json</a>
+      <a id="btnDownloadZoho" class="rounded border px-4 py-2" download="zoho.json">Download zoho.json</a>
+      <a id="btnDownloadPDF" class="rounded border px-4 py-2">Download PDF</a>
+      <button id="btnDelete" class="rounded bg-red-600 text-white px-4 py-2">Delete Run</button>
+      <a id="billLink" target="_blank" class="text-blue-700 underline hidden">Open Bill</a>
+      <div id="actionMsg" class="text-sm text-slate-600"></div>
+    </div>
+
+    <div id="itemsCard" class="rounded-2xl border bg-white"></div>
+  </main>
+
+  <script>
+    const API_BASE = window.location.origin;
+
+    function q(k){ return new URLSearchParams(location.search).get(k); }
+    function openJsonWindow(obj,title){
+      const w=window.open('', '_blank');
+      w.document.write('<pre>'+JSON.stringify(obj,null,2)+'</pre>');
+    }
+
+    async function apiGetRun(id){ 
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      const response = await fetch(API_BASE+'/api/runs/'+id, { headers });
+      if (!response.ok) {
+        throw new Error(`Failed to load run: ${response.status} ${response.statusText}`);
+      }
+      return (await response.json()); 
+    }
+    async function apiCreateDraft(id){ 
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      return (await fetch(API_BASE+'/api/runs/'+id+'/zoho/draft',{method:'POST', headers})).json(); 
+    }
+    async function apiViewParsed(id){ 
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      return (await fetch(API_BASE+'/api/runs/'+id+'/parsed', { headers })).json(); 
+    }
+    async function apiViewZoho(id){ 
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      return (await fetch(API_BASE+'/api/runs/'+id+'/zoho', { headers })).json(); 
+    }
+    async function apiDeleteRun(id){ 
+      const headers = {};
+      const token = localStorage.getItem('API_TOKEN');
+      if (token) headers['X-Auth-Token'] = token;
+      return (await fetch(API_BASE+'/api/runs/'+id,{method:'DELETE', headers})).json(); 
+    }
+
+    async function init(){
+      const id = q('id');
+      const run = await apiGetRun(id);
+      
+      // Determine status chip styling
+      let statusClass = 'bg-slate-100 text-slate-700 border border-slate-200'; // default
+      const statusLower = (run.status || '').toLowerCase();
+      if (statusLower === 'success') {
+        statusClass = 'bg-green-100 text-green-800 border border-green-200';
+      } else if (statusLower === 'warning') {
+        statusClass = 'bg-amber-100 text-amber-800 border border-amber-200';
+      } else if (statusLower === 'error') {
+        statusClass = 'bg-red-100 text-red-800 border border-red-200';
+      }
+      
+      document.getElementById('runCard').innerHTML = `Run ${run.id} — Vendor: ${run.vendor} <span class="${statusClass} rounded-full px-2 py-0.5 text-xs ml-2">${run.status}</span>`;
+
+      // Render notes if they exist
+      if(run.notes && run.notes.length > 0){
+        let notesHTML = '';
+        run.notes.forEach(note => {
+          notesHTML += `<div class="bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2 mb-2 text-sm">${note}</div>`;
+        });
+        const notesContainer = document.createElement('div');
+        notesContainer.innerHTML = notesHTML;
+        document.getElementById('runCard').after(notesContainer);
+      }
+
+      // Render items table with totals
+      if(run.items && run.items.length > 0){
+        let tableHTML = '<table class="w-full"><thead class="bg-slate-50"><tr>';
+        tableHTML += '<th class="text-left p-2">Item</th>';
+        tableHTML += '<th class="text-right p-2">Qty</th>';
+        tableHTML += '<th class="text-right p-2">Rate</th>';
+        tableHTML += '<th class="text-right p-2">Amount</th>';
+        tableHTML += '</tr></thead><tbody>';
+        
+        run.items.forEach(item => {
+          tableHTML += '<tr class="border-t">';
+          tableHTML += `<td class="p-2">${item.name || ''}</td>`;
+          tableHTML += `<td class="text-right p-2">${item.quantity || ''}</td>`;
+          tableHTML += `<td class="text-right p-2">${item.rate || ''}</td>`;
+          tableHTML += `<td class="text-right p-2">${item.amount || ''}</td>`;
+          tableHTML += '</tr>';
+        });
+        
+        tableHTML += '</tbody>';
+        
+        // Add footer with totals
+        if(run.totals){
+          tableHTML += '<tfoot class="bg-slate-100">';
+          tableHTML += '<tr class="border-t">';
+          tableHTML += '<td colspan="3" class="text-right p-2 font-semibold">Subtotal</td>';
+          tableHTML += `<td class="text-right p-2">${run.totals.subtotal || ''}</td>`;
+          tableHTML += '</tr>';
+          tableHTML += '<tr>';
+          tableHTML += '<td colspan="3" class="text-right p-2 font-semibold">Tax</td>';
+          tableHTML += `<td class="text-right p-2">${run.totals.tax || ''}</td>`;
+          tableHTML += '</tr>';
+          tableHTML += '<tr>';
+          tableHTML += '<td colspan="3" class="text-right p-2 font-semibold">Total</td>';
+          tableHTML += `<td class="text-right p-2">${run.totals.total || ''}</td>`;
+          tableHTML += '</tr>';
+          tableHTML += '</tfoot>';
+        }
+        
+        tableHTML += '</table>';
+        document.getElementById('itemsCard').innerHTML = tableHTML;
+      }
+
+      document.getElementById('btnCreateDraft').onclick=async()=>{
+        await apiCreateDraft(id); alert('Draft created (mock)');
+      };
+      document.getElementById('btnViewParsed').onclick=async()=>openJsonWindow(await apiViewParsed(id),'Parsed');
+      document.getElementById('btnViewZoho').onclick=async()=>openJsonWindow(await apiViewZoho(id),'Zoho');
+      document.getElementById('btnDownloadParsed').href=API_BASE+'/api/runs/'+id+'/parsed';
+      document.getElementById('btnDownloadZoho').href=API_BASE+'/api/runs/'+id+'/zoho';
+      document.getElementById('btnDownloadPDF').href=API_BASE+'/api/runs/'+id+'/file';
+      document.getElementById('btnDelete').onclick=async()=>{ await apiDeleteRun(id); location.href='index.html'; };
+    }
+    init();
+  </script>
+</body>
+</html>

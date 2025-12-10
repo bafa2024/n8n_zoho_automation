@@ -1,0 +1,11 @@
+PORT=5050
+PUBLIC_BASE_URL=http://localhost:5050
+DB_PATH=./data/app.db
+UPLOAD_DIR=./uploads
+PARSER_URL=http://127.0.0.1:7071
+
+# Mock mode: leave these empty to stay in mock. Set ZOHO_MODE=mock to force mock.
+ZOHO_MODE=mock
+ZOHO_API_DOMAIN=https://www.zohoapis.com
+ZOHO_ORG_ID=
+ZOHO_ACCESS_TOKEN=

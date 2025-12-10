@@ -1,0 +1,3 @@
+# Handle client-side routing for single-page application
+# This ensures all routes fall back to index.html
+/*    /index.html   200
