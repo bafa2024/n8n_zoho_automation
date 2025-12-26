@@ -143,6 +143,123 @@ app.use(morgan('dev'));
 // Public health endpoint (before auth middleware)
 app.get('/api/health', (_req, res) => res.json({ status: "healthy" }));
 
+// Public Zoho test endpoint (before auth middleware)
+app.get('/api/test-zoho', async (_req, res) => {
+  try {
+    const orgId = process.env.ZB_ORG_ID || process.env.ZOHO_ORG_ID || '';
+    const accessToken = process.env.ZB_ACCESS_TOKEN || process.env.ZOHO_ACCESS_TOKEN || '';
+    const apiDomain = process.env.ZB_BASE_URL || process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.com';
+    
+    if (!orgId || !accessToken) {
+      return res.status(400).json({
+        error: 'missing_credentials',
+        message: 'ZOHO_ORG_ID and ZOHO_ACCESS_TOKEN must be set in environment variables',
+        config: {
+          orgId: orgId ? 'set' : 'missing',
+          accessToken: accessToken ? 'set' : 'missing',
+          apiDomain
+        }
+      });
+    }
+    
+    // Test 1: Get organizations (verify token works)
+    const orgUrl = `${apiDomain.replace(/\/+$/, '')}/books/v3/organizations`;
+    console.log('Testing Zoho connection...');
+    console.log('URL:', orgUrl);
+    console.log('Org ID:', orgId);
+    console.log('Token (first 20 chars):', accessToken.substring(0, 20) + '...');
+    
+    const orgResponse = await fetch(orgUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    const orgData = await orgResponse.json() as any;
+    
+    if (!orgResponse.ok) {
+      return res.status(orgResponse.status).json({
+        error: 'zoho_api_error',
+        status: orgResponse.status,
+        message: orgData.message || orgData.error || 'Unknown error',
+        details: orgData,
+        test: 'organization_list_failed'
+      });
+    }
+    
+    // Test 2: Verify the organization ID matches
+    const organizations = orgData.organizations || [];
+    const foundOrg = organizations.find((org: any) => org.organization_id === orgId);
+    
+    // Test 3: Try to get vendors (verify full access)
+    const vendorsUrl = `${apiDomain.replace(/\/+$/, '')}/books/v3/vendors?organization_id=${orgId}&per_page=1`;
+    const vendorsResponse = await fetch(vendorsUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    const vendorsData = await vendorsResponse.json() as any;
+    const vendorsTest = vendorsResponse.ok;
+    
+    // Test 4: Try to get items
+    const itemsUrl = `${apiDomain.replace(/\/+$/, '')}/books/v3/items?organization_id=${orgId}&per_page=1`;
+    const itemsResponse = await fetch(itemsUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    const itemsData = await itemsResponse.json() as any;
+    const itemsTest = itemsResponse.ok;
+    
+    res.json({
+      success: true,
+      message: 'Zoho credentials are working!',
+      tests: {
+        organization_list: {
+          status: 'passed',
+          organizations_found: organizations.length,
+          your_org_id: orgId,
+          org_found: foundOrg ? 'yes' : 'no',
+          org_name: foundOrg?.name || 'not found'
+        },
+        vendors_access: {
+          status: vendorsTest ? 'passed' : 'failed',
+          can_read_vendors: vendorsTest,
+          error: vendorsTest ? null : vendorsData.error || vendorsData.message
+        },
+        items_access: {
+          status: itemsTest ? 'passed' : 'failed',
+          can_read_items: itemsTest,
+          error: itemsTest ? null : itemsData.error || itemsData.message
+        }
+      },
+      configuration: {
+        api_domain: apiDomain,
+        organization_id: orgId,
+        token_preview: accessToken.substring(0, 20) + '...',
+        token_length: accessToken.length
+      },
+      all_tests_passed: vendorsTest && itemsTest && foundOrg !== undefined
+    });
+    
+  } catch (error: any) {
+    console.error('Zoho test error:', error);
+    res.status(500).json({
+      error: 'test_failed',
+      message: error.message || 'Unknown error',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // Public version endpoint (before auth middleware)
 app.get('/api/version', (_req, res) => res.json({ version: packageJson.version }));
 
@@ -233,6 +350,14 @@ app.get('/oauth/zoho/callback', async (req, res) => {
   const tokenUrl = `${accountsDomain}/oauth/v2/token`;
   
   try {
+    // Log the request details for debugging
+    console.log('OAuth Token Exchange Request:', {
+      tokenUrl,
+      clientId: clientId?.substring(0, 20) + '...',
+      redirectUri,
+      codeLength: (code as string)?.length
+    });
+
     const tokenResponse = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
@@ -249,18 +374,155 @@ app.get('/oauth/zoho/callback', async (req, res) => {
     
     const tokenData = await tokenResponse.json() as any;
     
+    // Log the full response for debugging
+    console.log('Full Zoho Token Response:', JSON.stringify(tokenData, null, 2));
+    
     if (!tokenResponse.ok) {
+      console.error('Zoho Token Exchange Failed:', {
+        status: tokenResponse.status,
+        error: tokenData.error,
+        errorDescription: tokenData.error_description,
+        details: tokenData
+      });
+      
       return res.status(400).json({ 
-        error: "token_exchange_failed", 
-        details: tokenData 
+        error: tokenData.error || "token_exchange_failed",
+        error_description: tokenData.error_description || "Failed to exchange authorization code for access token",
+        details: tokenData,
+        hint: tokenData.error === 'invalid_code' 
+          ? "Authorization code expired or already used. Please start a new OAuth flow."
+          : "Check that Client ID, Client Secret, and Redirect URI match your Zoho API Console settings."
       });
     }
     
-    res.json(tokenData);
+    console.log('Token exchange successful!');
+    console.log('Token Response Keys:', Object.keys(tokenData));
+    console.log('Token Response:', {
+      access_token: tokenData.access_token ? tokenData.access_token.substring(0, 20) + '...' : 'missing',
+      refresh_token: tokenData.refresh_token ? tokenData.refresh_token.substring(0, 20) + '...' : 'missing',
+      expires_in: tokenData.expires_in,
+      api_domain: tokenData.api_domain,
+      token_type: tokenData.token_type
+    });
+    
+    // Extract token - handle different possible field names
+    const accessToken = tokenData.access_token || tokenData.accessToken || tokenData.token || '';
+    const refreshToken = tokenData.refresh_token || tokenData.refreshToken || '';
+    const apiDomain = tokenData.api_domain || tokenData.apiDomain || tokenData.api_domain || 'https://www.zohoapis.com';
+    const expiresIn = tokenData.expires_in || tokenData.expiresIn || 3600;
+    
+    if (!accessToken) {
+      console.error('WARNING: No access token found in response!');
+      console.error('Full response:', JSON.stringify(tokenData, null, 2));
+      return res.status(500).send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Token Error</title></head>
+        <body style="font-family: Arial; padding: 20px;">
+          <h2 style="color: red;">⚠️ Token Exchange Succeeded But No Token Found</h2>
+          <p>The OAuth exchange completed successfully, but the access token was not found in the response.</p>
+          <h3>Full Response:</h3>
+          <pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow: auto;">${JSON.stringify(tokenData, null, 2)}</pre>
+          <p><strong>Please check your server terminal logs for more details.</strong></p>
+        </body>
+        </html>
+      `);
+    }
+    
+    // Return a user-friendly HTML page with the tokens
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Zoho OAuth Success</title>
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+          .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+          .token-box { background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; border-radius: 5px; margin: 10px 0; }
+          .token-label { font-weight: bold; color: #495057; margin-bottom: 5px; }
+          .token-value { font-family: monospace; word-break: break-all; background: white; padding: 10px; border-radius: 3px; }
+          .instructions { background: #e7f3ff; border-left: 4px solid #2196F3; padding: 15px; margin: 20px 0; }
+          button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
+          button:hover { background: #0056b3; }
+        </style>
+      </head>
+      <body>
+        <div class="success">
+          <h2>✅ OAuth Token Generated Successfully!</h2>
+          <p>Your Zoho access token has been generated. Copy the values below to your <code>.env</code> file.</p>
+        </div>
+        
+        <div class="token-box">
+          <div class="token-label">Access Token:</div>
+          <div class="token-value" id="accessToken">${accessToken}</div>
+          <button onclick="copyToClipboard('accessToken')">Copy</button>
+        </div>
+        
+        ${refreshToken ? `
+        <div class="token-box">
+          <div class="token-label">Refresh Token:</div>
+          <div class="token-value" id="refreshToken">${refreshToken}</div>
+          <button onclick="copyToClipboard('refreshToken')">Copy</button>
+        </div>
+        ` : ''}
+        
+        <div class="token-box">
+          <div class="token-label">API Domain:</div>
+          <div class="token-value">${apiDomain}</div>
+        </div>
+        
+        <div class="token-box">
+          <div class="token-label">Expires In:</div>
+          <div class="token-value">${expiresIn} seconds (${Math.floor(expiresIn / 60)} minutes)</div>
+        </div>
+        
+        <div class="instructions">
+          <h3>📝 Next Steps:</h3>
+          <ol>
+            <li>Copy the <strong>Access Token</strong> above</li>
+            <li>Open your <code>backend/.env</code> file</li>
+            <li>Set <code>ZB_ACCESS_TOKEN</code> or <code>ZOHO_ACCESS_TOKEN</code> to the copied value</li>
+            <li>Set <code>ZB_BASE_URL</code> or <code>ZOHO_API_DOMAIN</code> to: <code>${tokenData.api_domain || 'https://www.zohoapis.com'}</code></li>
+            ${tokenData.refresh_token ? '<li>Save the <strong>Refresh Token</strong> securely - you can use it to get new access tokens when they expire</li>' : ''}
+            <li>Restart your backend server</li>
+          </ol>
+        </div>
+        
+        <div style="margin-top: 20px;">
+          <h3>📋 Quick Copy (for .env file):</h3>
+          <div class="token-box">
+            <div class="token-value" id="envConfig" style="white-space: pre-wrap;">ZB_ACCESS_TOKEN=${accessToken}
+ZB_BASE_URL=${apiDomain}
+${refreshToken ? `ZOHO_REFRESH_TOKEN=${refreshToken}` : ''}</div>
+            <button onclick="copyToClipboard('envConfig')">Copy All</button>
+          </div>
+        </div>
+        
+        <script>
+          function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            const text = element.textContent || element.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+              alert('Copied to clipboard!');
+            }).catch(err => {
+              // Fallback for older browsers
+              const textArea = document.createElement('textarea');
+              textArea.value = text;
+              document.body.appendChild(textArea);
+              textArea.select();
+              document.execCommand('copy');
+              document.body.removeChild(textArea);
+              alert('Copied to clipboard!');
+            });
+          }
+        </script>
+      </body>
+      </html>
+    `);
     
   } catch (error) {
     console.error('Token exchange error:', error);
-    res.status(500).json({ error: "internal_error" });
+    res.status(500).json({ error: "internal_error", message: (error as Error).message });
   }
 });
 
